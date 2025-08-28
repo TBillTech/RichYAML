@@ -155,6 +155,7 @@ experiment:
 - Bundle a webview that:
   - Renders MathLive editor and echoes MathJSON back into the YAML object.
   - Renders charts via vega-embed from the YAML.
+- Webview security and assets: the preview uses a strict CSP (default-src 'none'; nonce'd scripts only) and loads local JS/CSS from the extension `media/` folder via `asWebviewUri`, with `localResourceRoots` restricted to the extension folder.
 - Register your JSON Schema and connect it to files via `yaml.schemas`.
 - Implement file resolver to load `data.file` CSV/JSON from workspace into the webview (using `vscode.workspace.fs` + `postMessage`).
 

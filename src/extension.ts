@@ -72,7 +72,10 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     const { webview } = webviewPanel;
     webview.options = {
       enableScripts: true,
-      localResourceRoots: [this.context.extensionUri]
+      localResourceRoots: [
+        this.context.extensionUri,
+        vscode.Uri.joinPath(this.context.extensionUri, 'media')
+      ]
     };
 
     const updateWebview = () => {
@@ -80,7 +83,7 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
       webview.postMessage({ type: 'preview:update', text });
     };
 
-    webview.html = this.getHtml(webview);
+  webview.html = this.getHtml(webview);
 
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() === document.uri.toString()) {
@@ -105,10 +108,18 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
 
   private getHtml(webview: vscode.Webview): string {
     const nonce = getNonce();
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', 'main.js')
+    );
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', 'styles.css')
+    );
+
     const csp = [
       `default-src 'none'`,
       `img-src ${webview.cspSource} https: data:`,
-      `style-src ${webview.cspSource} 'unsafe-inline'`,
+      `style-src ${webview.cspSource}`,
+      `font-src ${webview.cspSource}`,
       `script-src 'nonce-${nonce}'`
     ].join('; ');
 
@@ -119,31 +130,14 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
   <meta http-equiv="Content-Security-Policy" content="${csp}" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RichYAML Preview</title>
-  <style>
-    html, body { height: 100%; padding: 0; margin: 0; }
-    body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); }
-    .container { padding: 8px 12px; }
-    .banner { font-weight: 600; margin-bottom: 8px; }
-    pre { white-space: pre-wrap; word-break: break-word; background: var(--vscode-textBlockQuote-background); border-left: 3px solid var(--vscode-textBlockQuote-border); padding: 8px; border-radius: 4px; }
-  </style>
-  
+  <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
   <div class="container">
     <div class="banner">RichYAML Preview (MVP placeholder)</div>
     <pre id="content">Loading…</pre>
   </div>
-  <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    window.addEventListener('message', (event) => {
-      const msg = event.data || {};
-      if (msg.type === 'preview:update') {
-        const el = document.getElementById('content');
-        el.textContent = msg.text ?? '';
-      }
-    });
-    vscode.postMessage({ type: 'preview:request' });
-  </script>
+  <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
   }

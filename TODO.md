@@ -16,7 +16,7 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 - Outcome: Register a custom text editor for `*.r.yaml` that opens a webview alongside text.
 - Interfaces: `vscode.window.registerCustomEditorProvider`, `CustomTextEditorProvider`.
 
-4) Webview bootstrapping and CSP
+4) Webview bootstrapping and CSP [DONE]
 - Outcome: Webview bundle loads with strict CSP and local asset resolution.
 - Interfaces: `webview.asWebviewUri`, `Content-Security-Policy` meta, message passing contract.
 
@@ -126,3 +126,4 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 - 2025-08-28: Completed MVP Task 1. Added TypeScript extension scaffold (`package.json`, `tsconfig.json`, `src/extension.ts`), build/watch scripts, CI workflow to build and package via `vsce`, VS Code tasks/launch, ignore files, and `CHANGELOG.md`. Build validated locally.
 - 2025-08-28: Completed MVP Task 2. Contributed `richyaml` language with patterns `*.r.yaml`/`*.r.yml`; added activation on `richyaml` and `yaml` files and workspaceContains globs; implemented detection of `!equation`/`!chart` tags and context key `richyaml.isRichYAML` on open/change.
  - 2025-08-28: Completed MVP Task 3. Registered `richyaml.editor` CustomTextEditor with an MVP webview placeholder syncing document text; wired package.json `customEditors` and build validated.
+ - 2025-08-28: Completed MVP Task 4. Added `media/` assets, served via `asWebviewUri`; enforced strict CSP (default-src 'none', nonce'd script, no inline styles) and constrained `localResourceRoots`. Webview loads JS/CSS bundle and message passing (`preview:update`/`preview:request`) verified.

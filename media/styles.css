@@ -1,0 +1,17 @@
+/* Minimal styles for RichYAML preview */
+html, body { height: 100%; padding: 0; margin: 0; }
+body {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+}
+.container { padding: 8px 12px; }
+.banner { font-weight: 600; margin-bottom: 8px; }
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--vscode-textBlockQuote-background);
+  border-left: 3px solid var(--vscode-textBlockQuote-border);
+  padding: 8px;
+  border-radius: 4px;
+}
