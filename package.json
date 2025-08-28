@@ -16,8 +16,24 @@
     "Other"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:richyaml",
+    "onLanguage:yaml",
+    "workspaceContains:**/*.r.yaml",
+    "workspaceContains:**/*.r.yml"
+  ],
   "contributes": {
+    "languages": [
+      {
+        "id": "richyaml",
+        "aliases": ["RichYAML", "richyaml"],
+        "mimetypes": ["text/x-richyaml"],
+        "filenamePatterns": [
+          "*.r.yaml",
+          "*.r.yml"
+        ]
+      }
+    ],
     "commands": [
       {
         "command": "richyaml.hello",

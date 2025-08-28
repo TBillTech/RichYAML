@@ -8,7 +8,7 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 - Outcome: VS Code extension skeleton with build/package scripts and CI smoke build.
 - Interfaces: VS Code extension host API; `vsce` packaging.
 
-2) File association and activation events
+2) File association and activation events [DONE]
 - Outcome: Associate `*.r.yaml` and YAML files containing `!equation`/`!chart` tags; activate on open.
 - Interfaces: `contributes.languages`, `contributes.customEditors`, activation events.
 
@@ -124,3 +124,4 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 ## Conversation Summary
 
 - 2025-08-28: Completed MVP Task 1. Added TypeScript extension scaffold (`package.json`, `tsconfig.json`, `src/extension.ts`), build/watch scripts, CI workflow to build and package via `vsce`, VS Code tasks/launch, ignore files, and `CHANGELOG.md`. Build validated locally.
+- 2025-08-28: Completed MVP Task 2. Contributed `richyaml` language with patterns `*.r.yaml`/`*.r.yml`; added activation on `richyaml` and `yaml` files and workspaceContains globs; implemented detection of `!equation`/`!chart` tags and context key `richyaml.isRichYAML` on open/change.
