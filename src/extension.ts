@@ -49,6 +49,101 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument(() => refreshActiveContext())
   );
+
+  // Register Custom Text Editor provider for RichYAML previews
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      'richyaml.editor',
+      new RichYAMLCustomEditorProvider(context),
+      { webviewOptions: { retainContextWhenHidden: true } }
+    )
+  );
 }
 
 export function deactivate() {}
+
+class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
+  constructor(private readonly context: vscode.ExtensionContext) {}
+
+  public resolveCustomTextEditor(
+    document: vscode.TextDocument,
+    webviewPanel: vscode.WebviewPanel
+  ): void | Thenable<void> {
+    const { webview } = webviewPanel;
+    webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this.context.extensionUri]
+    };
+
+    const updateWebview = () => {
+      const text = document.getText();
+      webview.postMessage({ type: 'preview:update', text });
+    };
+
+    webview.html = this.getHtml(webview);
+
+    const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
+      if (e.document.uri.toString() === document.uri.toString()) {
+        updateWebview();
+      }
+    });
+    webviewPanel.onDidDispose(() => changeSub.dispose());
+
+    webview.onDidReceiveMessage(async (msg) => {
+      switch (msg?.type) {
+        case 'preview:request':
+          updateWebview();
+          break;
+        default:
+          break;
+      }
+    });
+
+    // Initial render
+    updateWebview();
+  }
+
+  private getHtml(webview: vscode.Webview): string {
+    const csp = [
+      `default-src 'none'`,
+      `img-src ${webview.cspSource} https: data:`,
+      `style-src ${webview.cspSource} 'unsafe-inline'`,
+      `script-src ${webview.cspSource}`
+    ].join('; ');
+
+    return /* html */ `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="${csp}" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RichYAML Preview</title>
+  <style>
+    html, body { height: 100%; padding: 0; margin: 0; }
+    body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); }
+    .container { padding: 8px 12px; }
+    .banner { font-weight: 600; margin-bottom: 8px; }
+    pre { white-space: pre-wrap; word-break: break-word; background: var(--vscode-textBlockQuote-background); border-left: 3px solid var(--vscode-textBlockQuote-border); padding: 8px; border-radius: 4px; }
+  </style>
+  
+</head>
+<body>
+  <div class="container">
+    <div class="banner">RichYAML Preview (MVP placeholder)</div>
+    <pre id="content">Loading…</pre>
+  </div>
+  <script>
+    const vscode = acquireVsCodeApi();
+    window.addEventListener('message', (event) => {
+      const msg = event.data || {};
+      if (msg.type === 'preview:update') {
+        const el = document.getElementById('content');
+        el.textContent = msg.text ?? '';
+      }
+    });
+    vscode.postMessage({ type: 'preview:request' });
+  </script>
+</body>
+</html>`;
+  }
+}

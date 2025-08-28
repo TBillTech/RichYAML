@@ -20,7 +20,7 @@
     "onLanguage:richyaml",
     "onLanguage:yaml",
     "workspaceContains:**/*.r.yaml",
-    "workspaceContains:**/*.r.yml"
+  "workspaceContains:**/*.r.yml"
   ],
   "contributes": {
     "languages": [
@@ -32,6 +32,17 @@
           "*.r.yaml",
           "*.r.yml"
         ]
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "richyaml.editor",
+        "displayName": "RichYAML Preview",
+        "selector": [
+          { "filenamePattern": "**/*.r.yaml" },
+          { "filenamePattern": "**/*.r.yml" }
+        ],
+        "priority": "option"
       }
     ],
     "commands": [
