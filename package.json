@@ -39,8 +39,8 @@
         "viewType": "richyaml.editor",
         "displayName": "RichYAML Preview",
         "selector": [
-          { "filenamePattern": "**/*.r.yaml" },
-          { "filenamePattern": "**/*.r.yml" }
+          { "filenamePattern": "*.r.yaml" },
+          { "filenamePattern": "*.r.yml" }
         ],
         "priority": "option"
       }
