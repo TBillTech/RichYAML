@@ -4,7 +4,7 @@ Use this document to guide your work in this repository. Keep your responses sho
 
 ## Next steps
 
-Focus: Work on MVP Task 5.
+Focus: Work on MVP Task 6.
 
 Relevant `TODO.md` is in project base path
 Relevant `README.md` is in project base path

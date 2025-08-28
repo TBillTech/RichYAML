@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { RICHYAML_VERSION } from './version';
+import { parseWithTags } from './yamlService';
 
 export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand('richyaml.hello', () => {
@@ -81,7 +82,12 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
 
     const updateWebview = () => {
       const text = document.getText();
-      webview.postMessage({ type: 'preview:update', text });
+      const parsed = parseWithTags(text);
+      if (parsed.ok) {
+        webview.postMessage({ type: 'document:update', text, tree: parsed.tree });
+      } else {
+        webview.postMessage({ type: 'document:update', text, error: parsed.error });
+      }
     };
 
   const panelTitle = `RichYAML Preview ${RICHYAML_VERSION} (MVP Placeholder)`;
@@ -95,9 +101,9 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     });
     webviewPanel.onDidDispose(() => changeSub.dispose());
 
-    webview.onDidReceiveMessage(async (msg) => {
+  webview.onDidReceiveMessage(async (msg) => {
       switch (msg?.type) {
-        case 'preview:request':
+    case 'preview:request':
           updateWebview();
           break;
         default:
