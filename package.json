@@ -53,12 +53,14 @@
     ]
   },
   "scripts": {
-    "build": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+  "prebuild": "node scripts/extract-version.js",
+  "build": "tsc -p ./",
+  "watch": "npm run prebuild && tsc -watch -p ./",
     "lint": "echo 'No linter configured'",
-    "vscode:prepublish": "npm run build",
+  "prepare": "node scripts/extract-version.js",
+  "vscode:prepublish": "npm run prebuild && npm run build",
     "package": "vsce package --no-dependencies",
-    "ci": "npm ci && npm run build && npx vsce package --no-dependencies"
+  "ci": "npm ci && npm run prebuild && npm run build && npx vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",

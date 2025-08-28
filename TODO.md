@@ -2,7 +2,7 @@
 
 Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks implied by these items should be handled within the assignee’s implementation notes. Each item specifies key interfaces to VS Code and third-party libraries.
 
-## MVP
+## MVP v0.1
 
 1) Extension scaffolding and packaging [DONE]
 - Outcome: VS Code extension skeleton with build/package scripts and CI smoke build.

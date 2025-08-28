@@ -21,6 +21,7 @@ Relevant `README.md` is in project base path
 - Validate changes: build, run tests/linters, and report PASS/FAIL succinctly with key deltas only.
 - After ~3–5 tool calls or when editing >3 files, post a compact progress checkpoint (what changed, what’s next).
 - Use delta updates in conversation—avoid repeating unchanged plans.
+- Sync the version of the code to the TODO.md Section, with the task being the minor version.  Update the title of README.md.
 
 ## Prioritization
 - Prioritize items in `TODO.md` matching what we are working on during this session. If unclear, suggest small, high-impact fixes or docs/tests that clarify behavior, and get confirmation from the user. 

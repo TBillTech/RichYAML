@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { RICHYAML_VERSION } from './version';
 
 export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand('richyaml.hello', () => {
@@ -83,7 +84,9 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
       webview.postMessage({ type: 'preview:update', text });
     };
 
-  webview.html = this.getHtml(webview);
+  const panelTitle = `RichYAML Preview ${RICHYAML_VERSION} (MVP Placeholder)`;
+  webviewPanel.title = panelTitle;
+  webview.html = this.getHtml(webview, RICHYAML_VERSION);
 
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() === document.uri.toString()) {
@@ -106,7 +109,7 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     updateWebview();
   }
 
-  private getHtml(webview: vscode.Webview): string {
+  private getHtml(webview: vscode.Webview, versionLabel: string): string {
     const nonce = getNonce();
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'main.js')
@@ -129,18 +132,20 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="${csp}" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RichYAML Preview</title>
+  <title>RichYAML Preview ${versionLabel}</title>
   <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
   <div class="container">
-    <div class="banner">RichYAML Preview (MVP placeholder)</div>
+    <div class="banner">RichYAML Preview ${versionLabel} (MVP Placeholder)</div>
     <pre id="content">Loading…</pre>
   </div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
   }
+
+  // Version parsing moved to build step via scripts/extract-version.js
 }
 
 function getNonce() {
