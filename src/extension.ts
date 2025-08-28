@@ -104,11 +104,12 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
   }
 
   private getHtml(webview: vscode.Webview): string {
+    const nonce = getNonce();
     const csp = [
       `default-src 'none'`,
       `img-src ${webview.cspSource} https: data:`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
-      `script-src ${webview.cspSource}`
+      `script-src 'nonce-${nonce}'`
     ].join('; ');
 
     return /* html */ `<!DOCTYPE html>
@@ -132,7 +133,7 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     <div class="banner">RichYAML Preview (MVP placeholder)</div>
     <pre id="content">Loading…</pre>
   </div>
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     window.addEventListener('message', (event) => {
       const msg = event.data || {};
@@ -146,4 +147,13 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
 </body>
 </html>`;
   }
+}
+
+function getNonce() {
+  let text = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
 }
