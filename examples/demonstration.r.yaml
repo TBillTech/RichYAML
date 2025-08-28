@@ -1,0 +1,66 @@
+# RichYAML Demonstration
+# This file showcases example structures for !equation and !chart.
+# These are placeholders for the MVP and will render in future milestones.
+
+meta:
+  title: "Orbital Mechanics Demo"
+  author: "Mission Control"
+  notes:
+    - "Equation: true anomaly as a function of time using Kepler's equation."
+    - "Chart: approximate Earth–Mars distance over two years."
+
+# True anomaly (ν) demo. We store canonical MathJSON; LaTeX is optional.
+true_anomaly: !equation
+  desc: "True anomaly ν(t) via Kepler's equation (illustrative)."
+  latex: 
+    |
+      M = n (t - t_0),\quad M = E - e\sin E,\quad 
+      \nu = 2\arctan\left(\sqrt{\frac{1+e}{1-e}}\,\tan\frac{E}{2}\right)
+  mathjson:
+    fn: [
+      "List",
+      ["Equal", "M", ["Multiply", "n", ["Subtract", "t", "t0"]]],
+      ["Equal", "M", ["Subtract", "E", ["Multiply", "e", ["Sin", "E"]]]],
+      [
+        "Equal",
+        "ν",
+        [
+          "Multiply",
+          2,
+          [
+            "ArcTan",
+            [
+              "Multiply",
+              ["Sqrt", ["Divide", ["Add", 1, "e"], ["Subtract", 1, "e"]]],
+              ["Tan", ["Divide", "E", 2]]
+            ]
+          ]
+        ]
+      ]
+    ]
+
+# Chart: Approximate Earth–Mars distance over time (toy data)
+# Values are illustrative, not ephemerides-accurate.
+earth_mars_distance: !chart
+  title: "Earth–Mars Distance (AU)"
+  mark: line
+  data:
+    values:
+      - { t: "2025-01", d_au: 0.78 }
+      - { t: "2025-03", d_au: 1.20 }
+      - { t: "2025-05", d_au: 1.65 }
+      - { t: "2025-07", d_au: 1.00 }
+      - { t: "2025-09", d_au: 0.55 }
+      - { t: "2025-11", d_au: 0.52 }
+      - { t: "2026-01", d_au: 0.95 }
+      - { t: "2026-03", d_au: 1.45 }
+      - { t: "2026-05", d_au: 1.65 }
+      - { t: "2026-07", d_au: 1.10 }
+      - { t: "2026-09", d_au: 0.62 }
+      - { t: "2026-11", d_au: 0.50 }
+  encoding:
+    x: { field: t, type: ordinal, title: "Month" }
+    y: { field: d_au, type: quantitative, title: "Distance (AU)" }
+  legend:
+    orient: top
+  colors: ["#ff6f61"]
