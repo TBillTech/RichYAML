@@ -166,3 +166,22 @@ experiment:
 - **Performance:** for large datasets referenced by `file:`, stream/parse in the extension host, then send to the webview as JSON chunks.
 
 
+## Develop locally
+
+- Prereqs: Node 20+, VS Code.
+- Install deps and build:
+
+  ```bash
+  npm ci
+  npm run build
+  ```
+
+- Press F5 in VS Code to launch the Extension Development Host.
+
+Packaging (optional):
+
+```bash
+npx vsce package --no-dependencies
+```
+
+

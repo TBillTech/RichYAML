@@ -4,7 +4,7 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 
 ## MVP (Weeks 1–2)
 
-1) Extension scaffolding and packaging
+1) Extension scaffolding and packaging [DONE]
 - Outcome: VS Code extension skeleton with build/package scripts and CI smoke build.
 - Interfaces: VS Code extension host API; `vsce` packaging.
 
@@ -123,4 +123,4 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 
 ## Conversation Summary
 
-No prior
+- 2025-08-28: Completed MVP Task 1. Added TypeScript extension scaffold (`package.json`, `tsconfig.json`, `src/extension.ts`), build/watch scripts, CI workflow to build and package via `vsce`, VS Code tasks/launch, ignore files, and `CHANGELOG.md`. Build validated locally.

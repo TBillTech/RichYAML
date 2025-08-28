@@ -2,13 +2,9 @@
 
 Use this document to guide your work in this repository. Keep your responses short, concrete, and actionable.
 
-The user can invoke following these instructions, which means to perfectly follow the details under the Next steps section below by saying: 
-
-Follow instructions
-
 ## Next steps
 
-Focus: Work on MVP Task 1.
+Focus: Work on MVP Task 2.
 
 Relevant `TODO.md` is in project base path
 Relevant `README.md` is in project base path
@@ -50,5 +46,5 @@ Relevant `README.md` is in project base path
 - If you made any code changes, update the TODO.md and mark DONE all completed tasks.
 - Update the session conversation summary at the end of TODO.md.
 - Update the README.md with any findings that appeared during the session which are worth remarking on.  Be sure to preserve any solutions to command line issues, so we don't have to repeat broken command lines in the future.
-- Update these `INSTRUCTIONS.md` by replacing the "During this Session" with a concise and simple guess for the most reasonable next steps. This should usually direct the agent to the matching section in `TODO.md`. If there is no matching section in `TODO.md`, instead add a warning.
+- Update these `INSTRUCTIONS.md` by replacing the focus with the most reasonable next steps (usually the next TODO item). If there is no matching section in `TODO.md`, add a warning.
 - Finally, commit all file changes.

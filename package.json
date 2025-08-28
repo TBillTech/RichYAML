@@ -1,0 +1,42 @@
+{
+  "name": "richyaml",
+  "displayName": "RichYAML",
+  "description": "View/edit YAML with rendered equations and charts.",
+  "version": "0.0.1",
+  "publisher": "TBillTech",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TBillTech/RichYAML"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "richyaml.hello",
+        "title": "RichYAML: Hello"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "echo 'No linter configured'",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies",
+    "ci": "npm ci && npm run build && npx vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.5",
+    "vsce": "^2.15.0"
+  }
+}

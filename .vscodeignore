@@ -1,0 +1,10 @@
+.github/**
+**/*.map
+**/*.ts
+node_modules/.bin/**
+**/.DS_Store
+**/*.test.*
+coverage/**
+.vscode/**
+.vscode-test/**
+dist/**
