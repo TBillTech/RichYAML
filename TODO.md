@@ -9,11 +9,11 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 - Interfaces: VS Code extension host API; `vsce` packaging.
 
 2) File association and activation events
-- Outcome: Associate `*.mc.yaml` and YAML files containing `!equation`/`!chart` tags; activate on open.
+- Outcome: Associate `*.r.yaml` and YAML files containing `!equation`/`!chart` tags; activate on open.
 - Interfaces: `contributes.languages`, `contributes.customEditors`, activation events.
 
 3) CustomTextEditor registration
-- Outcome: Register a custom text editor for `*.mc.yaml` that opens a webview alongside text.
+- Outcome: Register a custom text editor for `*.r.yaml` that opens a webview alongside text.
 - Interfaces: `vscode.window.registerCustomEditorProvider`, `CustomTextEditorProvider`.
 
 4) Webview bootstrapping and CSP
@@ -116,7 +116,7 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 
 ## Acceptance checkpoints per milestone
 
-- MVP: Open `*.mc.yaml`, preview renders equations/charts, data.file resolver works, schema assists in editor.
+- MVP: Open `*.r.yaml`, preview renders equations/charts, data.file resolver works, schema assists in editor.
 - v0.2: Edits in preview update YAML, validation surfaced, optional Vega Editor link.
 - v0.3: LaTeX/HTML exports produce viewable artifacts with equations and charts.
 - v1.0: Snippets, hovers, tests pass; performance and accessibility reviewed.

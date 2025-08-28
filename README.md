@@ -151,7 +151,7 @@ experiment:
 
 ### MVP:
 
-- Scaffolding (yo code) + a CustomTextEditor for `*.mc.yaml`.
+- Scaffolding (yo code) + a CustomTextEditor for `*.r.yaml`.
 - Bundle a webview that:
   - Renders MathLive editor and echoes MathJSON back into the YAML object.
   - Renders charts via vega-embed from the YAML.
