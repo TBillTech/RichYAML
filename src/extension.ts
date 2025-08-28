@@ -127,9 +127,12 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     const csp = [
       `default-src 'none'`,
       `img-src ${webview.cspSource} https: data:`,
-      `style-src ${webview.cspSource}`,
-      `font-src ${webview.cspSource}`,
-      `script-src 'nonce-${nonce}'`
+      // Allow https for MathLive CSS
+      `style-src ${webview.cspSource} https: 'unsafe-inline'`,
+      // Allow fonts from extension and https (MathLive)
+      `font-src ${webview.cspSource} https:`,
+      // Allow our nonce'd script and https (MathLive runtime)
+      `script-src 'nonce-${nonce}' https:`
     ].join('; ');
 
     return /* html */ `<!DOCTYPE html>
@@ -140,12 +143,19 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RichYAML Preview ${versionLabel}</title>
   <link rel="stylesheet" href="${styleUri}">
+  <!-- MathLive CSS (read-only render); TODO: bundle locally in a future task -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive-static.css">
 </head>
 <body>
   <div class="container">
-    <div class="banner">RichYAML Preview ${versionLabel} (MVP Placeholder)</div>
-    <pre id="content">Loading…</pre>
+    <div class="banner">RichYAML Preview ${versionLabel}</div>
+    <div id="equations" class="eq-list" aria-label="Rendered equations"></div>
+    <details class="raw-view"><summary>Raw YAML and parsed tree</summary>
+      <pre id="content">Loading…</pre>
+    </details>
   </div>
+  <!-- MathLive runtime (read-only). Note: loaded from CDN for MVP; will be bundled later. -->
+  <script nonce="${nonce}" src="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.min.js"></script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

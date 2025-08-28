@@ -15,3 +15,13 @@ pre {
   padding: 8px;
   border-radius: 4px;
 }
+
+/* Equations */
+.eq-list { display: grid; gap: 8px; margin-bottom: 8px; }
+.eq-card { padding: 8px; border: 1px solid var(--vscode-editorWidget-border); border-radius: 6px; background: var(--vscode-editorWidget-background); }
+.eq-header { font-weight: 600; margin-bottom: 6px; }
+.eq-mathfield { padding: 6px; background: var(--vscode-editor-background); border-radius: 4px; border: 1px solid var(--vscode-textBlockQuote-border); }
+.eq-mathjson { margin-top: 6px; }
+.eq-empty { opacity: 0.7; font-style: italic; }
+
+.raw-view { margin-top: 8px; }

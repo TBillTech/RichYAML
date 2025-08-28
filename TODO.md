@@ -24,7 +24,7 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 - Outcome: In-host YAML loader/saver with lossless round-trip of comments and tags when possible.
 - Interfaces: `yaml` library of choice; message channel: `host<->webview` events `document:update`, `preview:request`.
 
-6) MathLive editor integration (read-only render)
+6) MathLive editor integration (read-only render) [DONE]
 - Outcome: Render `!equation` blocks from YAML into MathLive components in the webview.
 - Interfaces: MathLive runtime in webview; data contract: `{ mathjson, latex?, desc? }`.
 
@@ -128,3 +128,4 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
  - 2025-08-28: Completed MVP Task 3. Registered `richyaml.editor` CustomTextEditor with an MVP webview placeholder syncing document text; wired package.json `customEditors` and build validated.
  - 2025-08-28: Completed MVP Task 4. Added `media/` assets, served via `asWebviewUri`; enforced strict CSP (default-src 'none', nonce'd script, no inline styles) and constrained `localResourceRoots`. Webview loads JS/CSS bundle and message passing (`preview:update`/`preview:request`) verified.
  - 2025-08-28: Completed MVP Task 5. Implemented YAML parse/serialize service using `yaml`; host now posts `document:update` with parsed tree (tags preserved). Webview shows YAML text, parse errors, and a structured preview.
+ - 2025-08-28: Completed MVP Task 6. Webview scans parsed tree for `!equation` nodes and renders them as read-only MathLive fields with description headers; added fallback pretty-print for MathJSON when LaTeX absent; updated CSP and styles; README bumped to v0.1.6.
