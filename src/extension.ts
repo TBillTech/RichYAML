@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { RICHYAML_VERSION } from './version';
-import { parseWithTags } from './yamlService';
+import { parseWithTags, findRichNodes, RichNodeInfo } from './yamlService';
 
 export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand('richyaml.hello', () => {
@@ -224,12 +224,14 @@ function getNonce() {
  * when available, and falls back to a decoration with after/before content.
  * This is a minimal MVP placeholder; Task 10 will add AST→range mapping.
  */
-class InlinePreviewController implements vscode.Disposable {
+ class InlinePreviewController implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
   private perDocState = new Map<string, {
     enabled: boolean;
-  insets: any[];
+    insets: any[];
     decorationType?: vscode.TextEditorDecorationType;
+    debounce?: NodeJS.Timeout;
+    lastTextVersion?: number;
   }>();
 
   private richTagRegex = /!(equation|chart)\b/;
@@ -296,7 +298,12 @@ class InlinePreviewController implements vscode.Disposable {
     if (!ed || ed.document.uri.toString() !== doc.uri.toString()) return;
     const key = doc.uri.toString();
     const st = this.perDocState.get(key);
-    if (st?.enabled) this.renderForEditor(ed);
+    if (st?.enabled) {
+      if (st.debounce) clearTimeout(st.debounce);
+      st.debounce = setTimeout(() => {
+        this.renderForEditor(ed);
+      }, 120);
+    }
   }
 
   private enableForEditor(editor: vscode.TextEditor) {
@@ -326,6 +333,10 @@ class InlinePreviewController implements vscode.Disposable {
         st.decorationType.dispose();
         st.decorationType = undefined;
       }
+      if (st.debounce) {
+        clearTimeout(st.debounce);
+        st.debounce = undefined;
+      }
     }
   }
 
@@ -349,22 +360,32 @@ class InlinePreviewController implements vscode.Disposable {
     st.insets.forEach(i => i.dispose());
     st.insets = [];
 
-    const linesWithTags: number[] = [];
-    for (let i = 0; i < doc.lineCount; i++) {
-      const t = doc.lineAt(i).text;
-      if (this.richTagRegex.test(t)) linesWithTags.push(i);
-    }
+  // Use AST→range mapping for accuracy
+  const text = doc.getText();
+  const nodes: RichNodeInfo[] = findRichNodes(text);
+  const parsed = parseWithTags(text);
+    const linesWithTags: number[] = nodes
+      .map((n) => doc.positionAt(n.range.start).line)
+      .filter((ln, idx, arr) => arr.indexOf(ln) === idx)
+      .sort((a, b) => a - b);
 
     if (typeof (vscode.window as any).createWebviewTextEditorInset === 'function') {
-      // Use insets
-      for (const line of linesWithTags) {
-  const inset: any = (vscode.window as any).createWebviewTextEditorInset(editor, line, 80, {
-          enableScripts: false
-  });
-        inset.webview.html = this.buildInlineHtml(doc, line);
+      // Use insets with per-node inline webviews
+  for (const node of nodes) {
+        const startLine = doc.positionAt(node.range.start).line;
+        const inset: any = (vscode.window as any).createWebviewTextEditorInset(editor, startLine, 92, {
+          enableScripts: true
+        });
+        inset.webview.options = {
+          enableScripts: true,
+          localResourceRoots: [this.context.extensionUri, vscode.Uri.joinPath(this.context.extensionUri, 'media')]
+        };
+        inset.webview.html = this.buildInlineNodeHtml(inset.webview);
+  const nodeType = node.tag === '!equation' ? 'equation' : 'chart';
+  const data = this.resolveNodeData(parsed, node) ?? this.extractInlineNodeData(doc, node);
+  inset.webview.postMessage({ type: 'preview:init', nodeType, data });
         st.insets.push(inset);
       }
-      // Clear any decoration fallback
       if (st.decorationType) editor.setDecorations(st.decorationType, []);
     } else {
       // Decoration fallback: show an after content marker
@@ -384,25 +405,81 @@ class InlinePreviewController implements vscode.Disposable {
     }
   }
 
-  private buildInlineHtml(doc: vscode.TextDocument, line: number): string {
-    const text = doc.lineAt(line).text.trim();
-    const isEq = /!equation\b/.test(text);
-    const label = isEq ? 'Equation' : 'Chart';
-    const escaped = text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
-    const csp = `default-src 'none'; style-src 'unsafe-inline'; font-src ${this.context.extensionUri.toString()}`;
-    return `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><style>
-      body{margin:0;font:12px/1.4 var(--vscode-editor-font-family);color:var(--vscode-foreground);}
-      .wrap{padding:6px 8px;border-left:3px solid var(--vscode-editorLineNumber-foreground);background:var(--vscode-editor-background);}
-      .title{font-weight:bold;margin-bottom:4px}
-      .code{white-space:pre;overflow:hidden;text-overflow:ellipsis;color:var(--vscode-descriptionForeground)}
-    </style></head><body>
-    <div class="wrap" role="note" aria-label="${label} preview placeholder">
-      <div class="title">${label} preview (inline)</div>
-      <div class="code">${escaped}</div>
-    </div>
-    </body></html>`;
+  private buildInlineNodeHtml(webview: vscode.Webview): string {
+    const nonce = getNonce();
+    const style = [
+      `:root{color-scheme:var(--vscode-colorScheme, light dark)}`,
+      `body{margin:0;font:12px/1.4 var(--vscode-editor-font-family);color:var(--vscode-foreground);}`,
+      `.ry-title{font-weight:600;margin:6px 8px 4px 8px}`,
+      `.ry-body{margin:0 8px 8px 8px}`,
+      `.ry-json{max-height:160px;overflow:auto;background:var(--vscode-editor-inactiveSelectionBackground);padding:6px;border-radius:4px}`,
+      `.ry-chart{min-height:80px}`
+    ].join('\n');
+    const mathliveCss = `https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive-static.css`;
+    const mathliveJs = `https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.min.js`;
+    const vegaShimUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vega-shim.js'));
+    const inlineJsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'inline.js'));
+    const csp = [
+      `default-src 'none'`,
+      `img-src ${webview.cspSource} https: data:`,
+      `style-src ${webview.cspSource} https: 'unsafe-inline'`,
+      `font-src ${webview.cspSource} https:`,
+      `script-src ${webview.cspSource} 'nonce-${nonce}' https:`
+    ].join('; ');
+    return `<!DOCTYPE html><html><head>
+<meta http-equiv="Content-Security-Policy" content="${csp}">
+<link rel="stylesheet" href="${mathliveCss}">
+<style>${style}</style>
+</head><body>
+<div id="root"></div>
+<script nonce="${nonce}" src="${mathliveJs}"></script>
+<script nonce="${nonce}" src="${vegaShimUri}"></script>
+<script nonce="${nonce}" src="${inlineJsUri}"></script>
+</body></html>`;
+  }
+  private resolveNodeData(parsed: ReturnType<typeof parseWithTags>, node: RichNodeInfo): any | undefined {
+    if (!parsed || !('ok' in parsed) || !parsed.ok) return undefined;
+    const tree: any = parsed.tree as any;
+    // Walk path
+    let cur: any = tree;
+    for (const seg of node.path) {
+      if (cur == null) break;
+      if (typeof seg === 'number') {
+        const arr = Array.isArray(cur) ? cur : Array.isArray(cur?.$items) ? cur.$items : undefined;
+        if (!arr || seg < 0 || seg >= arr.length) { cur = undefined; break; }
+        cur = arr[seg];
+      } else {
+        cur = cur?.[seg];
+      }
+    }
+    if (!cur || typeof cur !== 'object') return undefined;
+    const tag = (cur.$tag || '').toString();
+    if (tag !== node.tag) return undefined;
+    // Normalize payloads for inline renderer
+    if (tag === '!equation') {
+      const { latex, mathjson, desc } = cur as any;
+      return { latex, mathjson, desc };
+    }
+    if (tag === '!chart') {
+      const { title, mark, data, encoding, legend, colors, vegaLite, width, height } = cur as any;
+      return { title, mark, data, encoding, legend, colors, vegaLite, width, height };
+    }
+    return undefined;
   }
 
+  private extractInlineNodeData(doc: vscode.TextDocument, node: RichNodeInfo): any {
+    // Minimal, safe data projection: just send shallow YAML block via text heuristics is unreliable.
+    // Better: parse the whole document once and pluck by path — TODO for Task 12.
+    const line = doc.positionAt(node.range.start).line;
+    const text = doc.getText(new vscode.Range(line, 0, Math.min(line + 50, doc.lineCount - 1), 0));
+    if (node.tag === '!equation') {
+      return { desc: undefined, latex: undefined, mathjson: undefined, _raw: text };
+    }
+    if (node.tag === '!chart') {
+      return { title: undefined, mark: undefined, encoding: undefined, data: undefined, _raw: text };
+    }
+    return { _raw: text };
+  }
   private getOrCreateDecorationType(key: string): vscode.TextEditorDecorationType {
     const existing = this.perDocState.get(key)?.decorationType;
     if (existing) return existing;

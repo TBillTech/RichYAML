@@ -46,13 +46,15 @@ These items ensure equations, charts, and future rich types render inline in the
 	- Implemented: `richyaml.preview.mode` setting with default `inline`; commands `RichYAML: Toggle Inline Previews` and `RichYAML: Open Custom Preview`.
 	- Inline previews: MVP placeholder using `createWebviewTextEditorInset` when available, with decoration fallback. Will be refined in Task 10 with precise YAML AST→range mapping.
 
-10) YAML AST → text range mapping
+10) YAML AST → text range mapping [DONE]
 - Outcome: Reliable mapping from parsed YAML nodes (e.g., `!equation`, `!chart`) to exact document ranges/lines to anchor inline previews and apply edits precisely.
 - Interfaces: `yaml` CST/AST with ranges; incremental reparsing on text edits; `TextDocument` positions; debounce strategy.
+	- Implemented: `findRichNodes(text)` returns tag, path, and start/end offsets using CST when available; inline renderer uses `positionAt(start)` to place insets accurately. Debounced re-render on edits.
 
-11) Inline renderer and lifecycle
+11) Inline renderer and lifecycle [DONE]
 - Outcome: A shared renderer bundle that can run inside inline insets (webview) with strict CSP; deterministic creation/disposal on scroll and edits; no memory leaks.
 - Interfaces: Webview insets (or lightweight decoration fallback rendering images/text), `postMessage` channel: `preview:update`, `data:request`, `schema:issues`; virtualization windowing for many nodes.
+	- Implemented: `media/inline.js` for single-node rendering (equation/chart) loaded in insets; CSP-safe resources (MathLive CDN + local vega-shim). Insets are created per node using Task 10 ranges and disposed/recreated on changes; debounce added.
 
 12) Two-way editing from inline equation
 - Outcome: Edits in MathLive inset update the underlying YAML (`mathjson`/`latex`) with proper undo/redo grouping and conflict handling when the surrounding text changes.
@@ -165,3 +167,5 @@ These items ensure equations, charts, and future rich types render inline in the
  - 2025-08-28: Completed MVP Task 6. Webview scans parsed tree for `!equation` nodes and renders them as read-only MathLive fields with description headers; added fallback pretty-print for MathJSON when LaTeX absent; updated CSP and styles; README bumped to v0.1.6.
  - 2025-08-29: Completed MVP Task 8. Added `schemas/richyaml.schema.json` (draft-07) and registered it via `contributes.yamlValidation` for `*.r.yaml`/`*.r.yml`. README bumped to v0.1.8 and version extracted into `src/version.ts` at build.
  - 2025-08-29: Completed MVP Task 9. Added inline preview mode default (`richyaml.preview.mode`), toggle/open commands, and an MVP inline inset/decoration renderer. README bumped to v0.1.9.
+ - 2025-08-29: Completed MVP Task 10. Added AST→range mapping via `findRichNodes` using YAML CST; integrated into inline renderer for precise anchoring with debounce. README bumped to v0.1.10.
+ - 2025-08-29: Completed MVP Task 11. Implemented inline renderer bundle and host wiring to feed actual node data to insets; strict CSP and lifecycle mgmt. Ready for two-way editing in Task 12.

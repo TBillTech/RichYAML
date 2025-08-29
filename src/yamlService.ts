@@ -1,5 +1,15 @@
 import { parseDocument, isMap, isScalar, isSeq, Scalar, YAMLMap, YAMLSeq, Document } from 'yaml';
 
+export type RichNodeInfo = {
+  tag: string;
+  /** JSONPath-like segments to the node (keys or numeric indices) */
+  path: Array<string | number>;
+  /** Start and end offsets in the original text */
+  range: { start: number; end: number };
+  /** Node kind for debugging */
+  kind: 'map' | 'seq' | 'scalar' | 'unknown';
+};
+
 export type ParsedResult =
   | { ok: true; doc: Document.Parsed; tree: unknown }
   | { ok: false; error: string };
@@ -67,4 +77,60 @@ function toPlainWithTags(node: any): unknown {
   const tag = (node as any).tag as string | undefined;
   if (tag && tag.startsWith('!')) return { $tag: tag, $value: value };
   return value;
+}
+
+/**
+ * Find all RichYAML-tagged nodes (!equation, !chart) and return their text ranges.
+ * Uses CST range when available for best accuracy, falling back to AST range.
+ */
+export function findRichNodes(text: string): RichNodeInfo[] {
+  const results: RichNodeInfo[] = [];
+  let doc: any;
+  try {
+    doc = parseDocument(text, { keepSourceTokens: true }) as any;
+  } catch {
+    return results;
+  }
+  if (doc?.errors?.length) return results;
+
+  const visit = (node: any, path: Array<string | number>) => {
+    if (!node) return;
+    const tag: string | undefined = node.tag;
+    const kind: RichNodeInfo['kind'] = isMap(node) ? 'map' : isSeq(node) ? 'seq' : isScalar(node) ? 'scalar' : 'unknown';
+
+    if (tag && (tag === '!equation' || tag === '!chart')) {
+      const { start, end } = nodeTextRange(node);
+      if (start != null && end != null) {
+        results.push({ tag, path: [...path], range: { start, end }, kind });
+      }
+    }
+
+    if (isMap(node)) {
+      for (const item of (node as YAMLMap<unknown, unknown>).items) {
+        const keyNode: any = item.key as any;
+        const key = typeof keyNode?.value === 'string' ? keyNode.value : String(keyNode?.toString?.() ?? keyNode?.value);
+        visit(item.value as any, path.concat(key));
+      }
+    } else if (isSeq(node)) {
+      (node as YAMLSeq<unknown>).items.forEach((child: any, idx: number) => visit(child, path.concat(idx)));
+    }
+  };
+
+  const root = (doc as any).contents;
+  visit(root, []);
+  return results;
+
+  function nodeTextRange(n: any): { start: number; end: number } {
+    // Prefer CST node range for precise start at the tag line
+    const cst = n?.cstNode as any;
+    if (cst && cst.range && typeof cst.range.start === 'number' && typeof cst.range.end === 'number') {
+      return { start: cst.range.start, end: cst.range.end };
+    }
+    // Fallback to AST range shapes (array or object)
+    const r: any = n?.range;
+    if (Array.isArray(r) && r.length >= 2) return { start: r[0] as number, end: r[1] as number };
+    if (r && typeof r.start === 'number' && typeof r.end === 'number') return { start: r.start, end: r.end };
+    // Worst-case: approximate by finding the first non-space character at/after key line
+    return { start: 0, end: 0 };
+  }
 }
