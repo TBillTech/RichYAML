@@ -20,7 +20,7 @@
     "onLanguage:richyaml",
     "onLanguage:yaml",
     "workspaceContains:**/*.r.yaml",
-  "workspaceContains:**/*.r.yml"
+    "workspaceContains:**/*.r.yml"
   ],
   "contributes": {
     "configuration": [

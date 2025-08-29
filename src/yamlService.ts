@@ -134,3 +134,64 @@ export function findRichNodes(text: string): RichNodeInfo[] {
     return { start: 0, end: 0 };
   }
 }
+
+/** Find the YAML AST node at a given JSONPath-like path. */
+export function getYamlNodeAtPath(doc: Document.Parsed, path: Array<string | number>): any | undefined {
+  let cur: any = (doc as any).contents;
+  for (const seg of path) {
+    if (cur == null) return undefined;
+    if (isMap(cur)) {
+      const map = cur as YAMLMap<unknown, unknown>;
+      let found: any = undefined;
+      for (const item of map.items) {
+        const kNode: any = item.key as any;
+        const key = typeof kNode?.value === 'string' ? kNode.value : String(kNode?.toString?.() ?? kNode?.value);
+        if (key === seg) { found = item.value; break; }
+      }
+      cur = found;
+    } else if (isSeq(cur) && typeof seg === 'number') {
+      const seq = cur as YAMLSeq<unknown>;
+      cur = seq.items[seg];
+    } else {
+      return undefined;
+    }
+  }
+  return cur;
+}
+
+/**
+ * Find the text range of a property value within a Map at the given path.
+ * Returns start/end offsets of the VALUE node. If the property is absent, returns undefined.
+ */
+export function getPropertyValueRange(
+  text: string,
+  path: Array<string | number>,
+  prop: string
+): { start: number; end: number } | undefined {
+  let doc: Document.Parsed;
+  try {
+    doc = parseDocument(text, { keepSourceTokens: true }) as any;
+  } catch {
+    return undefined;
+  }
+  const node = getYamlNodeAtPath(doc, path);
+  if (!node || !isMap(node)) return undefined;
+  const map = node as YAMLMap<unknown, unknown>;
+  for (const item of map.items) {
+    const kNode: any = item.key as any;
+    const key = typeof kNode?.value === 'string' ? kNode.value : String(kNode?.toString?.() ?? kNode?.value);
+    if (key === prop) {
+      const v: any = item.value as any;
+      const cst = v?.cstNode as any;
+      if (cst?.range && typeof cst.range.start === 'number' && typeof cst.range.end === 'number') {
+        return { start: cst.range.start, end: cst.range.end };
+      }
+      const r: any = v?.range;
+      if (Array.isArray(r) && r.length >= 2) return { start: r[0] as number, end: r[1] as number };
+      if (r && typeof r.start === 'number' && typeof r.end === 'number') return { start: r.start, end: r.end };
+      return undefined;
+    }
+  }
+  return undefined;
+}
+

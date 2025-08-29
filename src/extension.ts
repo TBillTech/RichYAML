@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { RICHYAML_VERSION } from './version';
-import { parseWithTags, findRichNodes, RichNodeInfo } from './yamlService';
+import { parseWithTags, findRichNodes, RichNodeInfo, getPropertyValueRange } from './yamlService';
 
 export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand('richyaml.hello', () => {
@@ -361,9 +361,9 @@ function getNonce() {
     const st = this.perDocState.get(key);
     if (!st || !st.enabled) return;
 
-    // Dispose existing insets before recreating
-    st.insets.forEach(i => i.dispose());
-    st.insets = [];
+  // Dispose existing insets before recreating
+  st.insets.forEach(i => i.dispose());
+  st.insets = [];
 
   // Use AST→range mapping for accuracy
   const text = doc.getText();
@@ -374,16 +374,39 @@ function getNonce() {
       .filter((ln, idx, arr) => arr.indexOf(ln) === idx)
       .sort((a, b) => a - b);
 
-  // Proposed API `createWebviewTextEditorInset` is not enabled in stable.
-  // Use decoration fallback for stable builds.
-  {
+    // Try proposed API first
+    const anyVscode: any = vscode as any;
+    const canInset = typeof anyVscode.window?.createWebviewTextEditorInset === 'function';
+    if (canInset && parsed.ok) {
+      for (const node of nodes) {
+        const pos = doc.positionAt(node.range.start);
+        const line = pos.line;
+        const inset = anyVscode.window.createWebviewTextEditorInset(editor, line, 18, { enableScripts: true, localResourceRoots: [this.context.extensionUri] });
+        inset.webview.html = this.buildInlineNodeHtml(inset.webview);
+        const data = this.resolveNodeData(parsed as any, node);
+        const nodeType = node.tag === '!equation' ? 'equation' : node.tag === '!chart' ? 'chart' : 'unknown';
+        const msg = { type: 'preview:init', nodeType, data, path: node.path };
+        inset.webview.postMessage(msg);
+        // Listen for edits from the inset
+        const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
+          try {
+            if (m?.type === 'edit:apply' && Array.isArray(m?.path)) {
+              await this.applyInlineEdit(doc, m);
+            }
+          } catch (e) {
+            console.error('[RichYAML] apply edit failed:', e);
+          }
+        });
+        st.insets.push({ dispose: () => { try { sub.dispose(); } catch {} try { inset.dispose(); } catch {} } });
+      }
+    } else {
       // Decoration fallback: show an after content marker
       const decoType = this.getOrCreateDecorationType(key);
       const decos: vscode.DecorationOptions[] = linesWithTags.map((line) => ({
         range: new vscode.Range(line, Number.MAX_SAFE_INTEGER, line, Number.MAX_SAFE_INTEGER),
         renderOptions: {
           after: {
-      contentText: ' ⟶ RichYAML preview',
+            contentText: ' ➶ RichYAML preview',
             color: new vscode.ThemeColor('editorCodeLens.foreground'),
             margin: '0 0 0 12px'
           }
@@ -425,6 +448,36 @@ function getNonce() {
 <script nonce="${nonce}" src="${vegaShimUri}"></script>
 <script nonce="${nonce}" src="${inlineJsUri}"></script>
 </body></html>`;
+  }
+  private async applyInlineEdit(doc: vscode.TextDocument, msg: any) {
+    // Supported: update equation latex or mathjson at node path.
+    // Minimal MVP: write latex string when provided.
+    const path = msg.path as Array<string | number>;
+    const editKind = String(msg.edit || 'set');
+    if (editKind !== 'set') return;
+    const key = typeof msg.key === 'string' ? msg.key : 'latex';
+    const value = msg.value;
+    const fullText = doc.getText();
+    const range = getPropertyValueRange(fullText, path, key);
+    const wsEdit = new vscode.WorkspaceEdit();
+    if (range) {
+      // Replace existing scalar value as a quoted YAML string
+      const start = doc.positionAt(range.start);
+      const end = doc.positionAt(range.end);
+      const yamlScalar = JSON.stringify(String(value));
+      wsEdit.replace(doc.uri, new vscode.Range(start, end), yamlScalar);
+    } else {
+      // Property missing: insert a new line under the map at path.end line
+      // Heuristic: insert after node start line with two spaces indentation
+      const nodes = findRichNodes(fullText);
+      const node = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(path));
+      const insertPos = node ? doc.positionAt(node.range.start) : new vscode.Position(0, 0);
+      const indent = '  ';
+      const yamlScalar = JSON.stringify(String(value));
+      const insertText = `\n${indent}${key}: ${yamlScalar}`;
+      wsEdit.insert(doc.uri, insertPos.translate(1, 0), insertText);
+    }
+    await vscode.workspace.applyEdit(wsEdit);
   }
   private resolveNodeData(parsed: ReturnType<typeof parseWithTags>, node: RichNodeInfo): any | undefined {
     if (!parsed || !('ok' in parsed) || !parsed.ok) return undefined;

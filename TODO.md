@@ -56,9 +56,9 @@ These items ensure equations, charts, and future rich types render inline in the
 - Interfaces: Webview insets (or lightweight decoration fallback rendering images/text), `postMessage` channel: `preview:update`, `data:request`, `schema:issues`; virtualization windowing for many nodes.
 	- Implemented: `media/inline.js` for single-node rendering (equation/chart) loaded in insets; CSP-safe resources (MathLive CDN + local vega-shim). Insets are created per node using Task 10 ranges and disposed/recreated on changes; debounce added.
 
-12) Two-way editing from inline equation
-- Outcome: Edits in MathLive inset update the underlying YAML (`mathjson`/`latex`) with proper undo/redo grouping and conflict handling when the surrounding text changes.
-- Interfaces: `webview→host` `edit:apply`; `WorkspaceEdit` with range targeting; minimal conflict policy (retry/reparse, drop with banner on hard conflict).
+12) Two-way editing from inline equation [DONE]
+- Outcome: Edits in MathLive inset update the underlying YAML (`latex`) with undo/redo via WorkspaceEdit; basic conflict handling (fallback insert when property missing).
+- Interfaces: `webview→host` `edit:apply` with `path/key/value`; `WorkspaceEdit` replacing value range via CST; minimal fallback insert.
 
 13) Minimal inline chart controls → YAML
 - Outcome: Basic controls in the chart inset (title/mark/encodings dropdowns) that write back to YAML; validate against schema before applying.
@@ -187,3 +187,4 @@ S3) Side preview panel (auto-synced)
  - 2025-08-29: Completed MVP Task 9. Added inline preview mode default (`richyaml.preview.mode`), toggle/open commands, and an MVP inline inset/decoration renderer. README bumped to v0.1.9.
  - 2025-08-29: Completed MVP Task 10. Added AST→range mapping via `findRichNodes` using YAML CST; integrated into inline renderer for precise anchoring with debounce. README bumped to v0.1.10.
  - 2025-08-29: Completed MVP Task 11. Implemented inline renderer bundle and host wiring to feed actual node data to insets; strict CSP and lifecycle mgmt. Ready for two-way editing in Task 12.
+ - 2025-08-29: Completed MVP Task 12. Enabled editable MathLive insets for equations and applied `latex` updates back to YAML via precise range replace or insert; README bumped to v0.1.12.

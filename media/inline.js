@@ -17,13 +17,14 @@
     return el;
   }
 
-  function renderEquation(root, data) {
+  function renderEquation(root, data, path) {
     root.innerHTML = '';
     const title = h('div', { className: 'ry-title', text: data.desc || 'Equation' });
     const body = h('div', { className: 'ry-body' });
     const mf = document.createElement('math-field');
-    mf.setAttribute('readonly', '');
-    mf.setAttribute('virtual-keyboard-mode', 'off');
+    // Make editable for two-way MVP
+    mf.removeAttribute('readonly');
+    mf.setAttribute('virtual-keyboard-mode', 'manual');
     try { mf.value = data.latex ? String(data.latex) : '\\text{MathJSON}'; } catch {}
     body.appendChild(mf);
     if (!data.latex && data.mathjson) {
@@ -32,6 +33,15 @@
     }
     root.appendChild(title);
     root.appendChild(body);
+    // Debounced change -> host edit apply
+    let t;
+    const send = () => {
+      if (!vscode) return;
+      const payload = { type: 'edit:apply', path, key: 'latex', edit: 'set', value: mf.value || '' };
+      vscode.postMessage(payload);
+    };
+    const onInput = () => { clearTimeout(t); t = setTimeout(send, 300); };
+    mf.addEventListener('input', onInput);
     setTimeout(() => {
       if (!customElements.get('math-field')) {
         const warn = h('div', { className: 'ry-warn', text: 'Math renderer unavailable' });
@@ -120,7 +130,7 @@
     if (msg.type !== 'preview:init') return;
     const root = document.getElementById('root');
     if (!root) return;
-    if (msg.nodeType === 'equation') renderEquation(root, msg.data);
+    if (msg.nodeType === 'equation') renderEquation(root, msg.data, msg.path);
     else if (msg.nodeType === 'chart') renderChart(root, msg.data);
   }
 
