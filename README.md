@@ -1,27 +1,4 @@
-## Chart rendering and CSP (Content Security Policy)
-
-**Current approach:**
-- This extension uses the "no expression" builds of Vega and Vega-Lite (`vega.noexpr.min.js`, `vega-lite.noexpr.min.js`) to allow chart rendering in a strict VS Code webview CSP (no `unsafe-eval`).
-- This means most basic charts (bar, line, scatter, etc.) work, but charts using calculated fields, expressions, or advanced interactivity will not.
-
-**What is not supported:**
-- Calculated fields (e.g., `calculate: "datum.a + datum.b"`)
-- Conditional encodings using expressions (e.g., `"color": {"condition": {"test": ...}}`)
-- Signal expressions, dynamic tooltips, or any chart logic that requires JavaScript evaluation
-
-**Why:**
-- VS Code webviews have a strict CSP by default, and allowing `unsafe-eval` is not recommended for security reasons.
-- The "no expression" builds of Vega/Vega-Lite are the safest way to support most charts in this environment.
-
-**How to enable full Vega/Vega-Lite features in the future:**
-- Implement a sandboxed web worker that loads the full (default) builds of Vega/Vega-Lite, renders the chart to SVG/PNG, and sends the result back to the main webview for display.
-- This allows full expression support and interactivity, while keeping the main webview secure.
-- See [Vega documentation](https://vega.github.io/vega/docs/api/view/#view.toImageURL) and [VS Code extension samples](https://github.com/microsoft/vscode-extension-samples) for patterns.
-
-**Summary:**
-- For most users and MVP, the current approach is sufficient.
-- If you need advanced chart features, plan for a worker-based renderer in a future milestone.
-# RichYAML v0.1.6
+# RichYAML v0.1.7
 VSCode Extension to view/edit YAML with in place rendering of formulas and charts (and more)
 
 YAML as a single, portable “source of truth” with equations stored as MathJSON and declarative charts.

@@ -28,7 +28,7 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 - Outcome: Render `!equation` blocks from YAML into MathLive components in the webview.
 - Interfaces: MathLive runtime in webview; data contract: `{ mathjson, latex?, desc? }`.
 
-7) Vega-Embed chart render (read-only)
+7) Vega-Embed chart render (read-only) [DONE]
 - Outcome: Render `!chart` nodes using vega-embed with basic mark/encoding/data.
 - Interfaces: `vega`, `vega-lite`, `vega-embed`; data contract mirrors README schema.
 
