@@ -64,3 +64,14 @@ earth_mars_distance: !chart
   legend:
     orient: top
   colors: ["#ff6f61"]
+
+# Chart using external CSV resolved from workspace
+speed_chart_from_file: !chart
+  title: "Speed over time (CSV)"
+  mark: line
+  data:
+    file: data/speed.csv
+  encoding:
+    x: { field: t, type: quantitative, title: "Time (s)" }
+    y: { field: v, type: quantitative, title: "Speed (m/s)" }
+  colors: ["#1f77b4"]

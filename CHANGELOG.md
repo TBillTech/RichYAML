@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.17
+- Custom preview: debounced updates on text changes.
+- Webview: preserve scroll position and focus when re-rendering.
+
 ## v0.1.15
 - Inline insets: tightened CSP/URI allowlist; disabled connect/frame/object/media; ARIA roles/labels added.
 - Keyboard: Escape or Ctrl+Enter returns focus from inset to editor; root container focusable.

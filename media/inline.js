@@ -187,52 +187,83 @@
       }
     });
 
+    // If data.file provided, ask host to resolve; then render with values
+    const maybeRequestData = (cb) => {
+      const file = chart && chart.data && chart.data.file;
+      if (vscode && typeof file === 'string' && file.trim()) {
+        const onMsg = (ev) => {
+          const m = ev.data || {};
+          if (!m || !m.type) return;
+          if (m.type === 'data:resolved' && JSON.stringify(m.path) === JSON.stringify(path)) {
+            window.removeEventListener('message', onMsg);
+            const next = { ...chart, data: { ...(chart.data || {}), values: Array.isArray(m.values) ? m.values : [] } };
+            cb(null, next);
+          } else if (m.type === 'data:error' && JSON.stringify(m.path) === JSON.stringify(path)) {
+            window.removeEventListener('message', onMsg);
+            hint.textContent = 'Data error: ' + (m.error || 'unknown');
+            hint.style.color = 'var(--vscode-errorForeground, red)';
+            cb(new Error(m.error || 'data error'));
+          }
+        };
+        window.addEventListener('message', onMsg);
+        vscode.postMessage({ type: 'data:request', path, file });
+      } else {
+        cb(null, chart);
+      }
+    };
+
     ensureVega((err) => {
       if (err) {
         target.textContent = 'Chart engine unavailable';
         target.style.color = 'red';
         return;
       }
-      const enc = chart.encoding || {};
-      const x = enc.x || {}, y = enc.y || {};
-      const xField = x.field || 'x';
-      const yField = y.field || 'y';
-      const xType = (x.type || '').toLowerCase();
-      const xScaleType = xType === 'quantitative' ? 'linear' : 'point';
-      const values = Array.isArray(chart?.data?.values) ? chart.data.values : [];
-      const width = Number(chart.width) > 0 ? Number(chart.width) : 320;
-      const height = Number(chart.height) > 0 ? Number(chart.height) : 160;
-      const color = Array.isArray(chart.colors) && chart.colors.length ? String(chart.colors[0]) : undefined;
-      const enterCommon = { x: { scale: 'x', field: xField }, y: { scale: 'y', field: yField } };
-      if (color) {
-        if ((chart.mark || 'line') === 'point') enterCommon.fill = { value: color }; else enterCommon.stroke = { value: color };
-      }
-      const spec = {
-        width, height, padding: 8,
-        data: [{ name: 'table', values }],
-        scales: [
-          { name: 'x', type: xScaleType, domain: { data: 'table', field: xField }, range: 'width' },
-          { name: 'y', type: 'linear', nice: true, domain: { data: 'table', field: yField }, range: 'height' }
-        ],
-        axes: [
-          { orient: 'bottom', scale: 'x', title: x.title },
-          { orient: 'left', scale: 'y', title: y.title }
-        ],
-        marks: [
-          (chart.mark || 'line') === 'point'
-            ? { type: 'symbol', from: { data: 'table' }, encode: { enter: { ...enterCommon, size: { value: 60 } } } }
-            : { type: 'line', from: { data: 'table' }, encode: { enter: { ...enterCommon, strokeWidth: { value: 2 } } } }
-        ]
+      const renderWith = (c) => {
+        const enc = c.encoding || {};
+        const x = enc.x || {}, y = enc.y || {};
+        const xField = x.field || 'x';
+        const yField = y.field || 'y';
+        const xType = (x.type || '').toLowerCase();
+        const xScaleType = xType === 'quantitative' ? 'linear' : 'point';
+        const values = Array.isArray(c?.data?.values) ? c.data.values : [];
+        const width = Number(c.width) > 0 ? Number(c.width) : 320;
+        const height = Number(c.height) > 0 ? Number(c.height) : 160;
+        const color = Array.isArray(c.colors) && c.colors.length ? String(c.colors[0]) : undefined;
+        const enterCommon = { x: { scale: 'x', field: xField }, y: { scale: 'y', field: yField } };
+        if (color) {
+          if ((c.mark || 'line') === 'point') enterCommon.fill = { value: color }; else enterCommon.stroke = { value: color };
+        }
+        const spec = {
+          width, height, padding: 8,
+          data: [{ name: 'table', values }],
+          scales: [
+            { name: 'x', type: xScaleType, domain: { data: 'table', field: xField }, range: 'width' },
+            { name: 'y', type: 'linear', nice: true, domain: { data: 'table', field: yField }, range: 'height' }
+          ],
+          axes: [
+            { orient: 'bottom', scale: 'x', title: x.title },
+            { orient: 'left', scale: 'y', title: y.title }
+          ],
+          marks: [
+            (c.mark || 'line') === 'point'
+              ? { type: 'symbol', from: { data: 'table' }, encode: { enter: { ...enterCommon, size: { value: 60 } } } }
+              : { type: 'line', from: { data: 'table' }, encode: { enter: { ...enterCommon, strokeWidth: { value: 2 } } } }
+          ]
+        };
+        try {
+          const runtime = window.vega.parse(spec, null, { ast: true });
+          const interp = window.__vegaExpressionInterpreter || window.vega.expressionInterpreter;
+          const view = new window.vega.View(runtime, { renderer: 'canvas', container: target, hover: true, expr: interp });
+          view.runAsync();
+        } catch (e) {
+          target.textContent = 'Chart render error: ' + e.message;
+          target.style.color = 'red';
+        }
       };
-      try {
-        const runtime = window.vega.parse(spec, null, { ast: true });
-        const interp = window.__vegaExpressionInterpreter || window.vega.expressionInterpreter;
-        const view = new window.vega.View(runtime, { renderer: 'canvas', container: target, hover: true, expr: interp });
-        view.runAsync();
-      } catch (e) {
-        target.textContent = 'Chart render error: ' + e.message;
-        target.style.color = 'red';
-      }
+      maybeRequestData((e2, c2) => {
+        if (e2) return; // error already shown in hint
+        renderWith(c2);
+      });
     });
   }
 

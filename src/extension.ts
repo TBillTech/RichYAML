@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as YAML from 'yaml';
 import { RICHYAML_VERSION } from './version';
 import { parseWithTags, findRichNodes, RichNodeInfo, getPropertyValueRange } from './yamlService';
 
@@ -124,6 +125,8 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
       ]
     };
 
+    // Debounced update on document changes to keep webview smooth
+    let updateTimer: NodeJS.Timeout | undefined;
     const updateWebview = () => {
       const text = document.getText();
       const parsed = parseWithTags(text);
@@ -133,30 +136,51 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
         webview.postMessage({ type: 'document:update', text, error: parsed.error });
       }
     };
+    const scheduleUpdate = () => {
+      const cfg = vscode.workspace.getConfiguration('richyaml');
+      // Reuse inline debounce setting for custom preview updates as well
+      const delay = Math.max(0, Number(cfg.get('preview.inline.debounceMs', 150)) || 0);
+      if (updateTimer) clearTimeout(updateTimer);
+      updateTimer = setTimeout(() => {
+        updateWebview();
+      }, delay);
+    };
 
   const panelTitle = `RichYAML Preview ${RICHYAML_VERSION} (MVP Placeholder)`;
   webviewPanel.title = panelTitle;
   webview.html = this.getHtml(webview, RICHYAML_VERSION);
 
-    const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
+  const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() === document.uri.toString()) {
-        updateWebview();
+    scheduleUpdate();
       }
     });
     webviewPanel.onDidDispose(() => changeSub.dispose());
 
-  webview.onDidReceiveMessage(async (msg) => {
+    webview.onDidReceiveMessage(async (msg) => {
       switch (msg?.type) {
     case 'preview:request':
           updateWebview();
           break;
+        case 'data:request': {
+          const file = String(msg?.file || '');
+          const cfg = vscode.workspace.getConfiguration('richyaml');
+          const maxPts = Math.max(0, Number(cfg.get('preview.inline.maxDataPoints', 1000)) || 0);
+          try {
+            const values = await resolveDataFileRelative(document.uri, file, maxPts);
+            webview.postMessage({ type: 'data:resolved', path: msg?.path, file, values });
+          } catch (e: any) {
+            webview.postMessage({ type: 'data:error', path: msg?.path, file, error: e?.message || String(e) });
+          }
+          break;
+        }
         default:
           break;
       }
     });
 
-    // Initial render
-    updateWebview();
+  // Initial render
+  updateWebview();
   }
 
   private getHtml(webview: vscode.Webview, versionLabel: string): string {
@@ -439,7 +463,7 @@ function getNonce() {
         const msg = { type: 'preview:init', nodeType, data, path: node.path };
         inset.webview.postMessage(msg);
         // Listen for edits and focus intents from the inset
-        const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
+    const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
           try {
             if (m?.type === 'edit:apply' && Array.isArray(m?.path)) {
               await this.applyInlineEdit(doc, m);
@@ -452,6 +476,16 @@ function getNonce() {
                   vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
                 });
               } catch {}
+      } else if (m?.type === 'data:request') {
+              const file = String(m?.file || '');
+              const cfg = vscode.workspace.getConfiguration('richyaml');
+              const maxPts = Math.max(0, Number(cfg.get('preview.inline.maxDataPoints', 1000)) || 0);
+              try {
+                const values = await resolveDataFileRelative(doc.uri, file, maxPts);
+                inset.webview.postMessage({ type: 'data:resolved', path: m?.path, file, values });
+              } catch (e: any) {
+                inset.webview.postMessage({ type: 'data:error', path: m?.path, file, error: e?.message || String(e) });
+              }
             }
           } catch (e) {
             console.error('[RichYAML] apply edit failed:', e);
@@ -720,4 +754,102 @@ function getNonce() {
     const type = vscode.window.createTextEditorDecorationType({});
     return type;
   }
+}
+
+/**
+ * Resolve a data.file path relative to a document and parse into array of records.
+ * Supports CSV, JSON, YAML. Truncates to maxPoints.
+ */
+async function resolveDataFileRelative(docUri: vscode.Uri, filePath: string, maxPoints: number): Promise<any[]> {
+  if (!filePath || typeof filePath !== 'string') throw new Error('Missing file');
+  let p = filePath.trim();
+  if (p.startsWith('file:')) p = p.slice('file:'.length);
+  // Normalize separators
+  p = p.replace(/\\/g, '/');
+  const isAbs = path.isAbsolute(p);
+  const baseDir = path.dirname(docUri.fsPath);
+  const targetFs = isAbs ? p : path.join(baseDir, p);
+  const target = vscode.Uri.file(targetFs);
+  let buf: Uint8Array;
+  try {
+    buf = await vscode.workspace.fs.readFile(target);
+  } catch (e: any) {
+    throw new Error(`Unable to read ${p}: ${e?.message || e}`);
+  }
+  const ext = path.extname(target.fsPath).toLowerCase();
+  let values: any[] = [];
+  try {
+    if (ext === '.csv') {
+      values = parseCsvToObjects(new TextDecoder('utf-8').decode(buf));
+    } else if (ext === '.json') {
+      const text = new TextDecoder('utf-8').decode(buf);
+      const data = JSON.parse(text);
+      if (Array.isArray(data)) values = data;
+      else if (data && Array.isArray((data as any).values)) values = (data as any).values;
+      else throw new Error('JSON must be an array or an object with a values array');
+    } else if (ext === '.yml' || ext === '.yaml') {
+      const text = new TextDecoder('utf-8').decode(buf);
+      const data = YAML.parse(text);
+      if (Array.isArray(data)) values = data;
+      else if (data && Array.isArray((data as any).values)) values = (data as any).values;
+      else throw new Error('YAML must be an array or an object with a values array');
+    } else {
+      throw new Error(`Unsupported file type: ${ext || 'unknown'}`);
+    }
+  } catch (e: any) {
+    throw new Error(`Parse error for ${p}: ${e?.message || e}`);
+  }
+  if (typeof maxPoints === 'number' && maxPoints >= 0 && values.length > maxPoints) {
+    values = values.slice(0, maxPoints);
+  }
+  return values;
+}
+
+/** Minimal CSV parser: returns array of objects keyed by header row. */
+function parseCsvToObjects(text: string): any[] {
+  const rows = parseCsvRows(text);
+  if (!rows.length) return [];
+  const header = rows[0];
+  const out: any[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const obj: any = {};
+    for (let j = 0; j < header.length; j++) {
+      const k = String(header[j] ?? `col${j + 1}`);
+      obj[k] = r[j] ?? '';
+    }
+    out.push(obj);
+  }
+  return out;
+}
+
+/** CSV to rows with RFC4180-ish quotes, commas, and newlines. */
+function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let i = 0;
+  let inQuotes = false;
+  const pushCell = () => { row.push(cell); cell = ''; };
+  const pushRow = () => { pushCell(); rows.push(row); row = []; };
+  while (i < text.length) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { cell += '"'; i += 2; continue; } // escaped quote
+        inQuotes = false; i++; continue;
+      } else { cell += ch; i++; continue; }
+    } else {
+      if (ch === '"') { inQuotes = true; i++; continue; }
+      if (ch === ',') { pushCell(); i++; continue; }
+      if (ch === '\n') { pushRow(); i++; continue; }
+      if (ch === '\r') { if (text[i + 1] === '\n') i++; pushRow(); i++; continue; }
+      cell += ch; i++;
+    }
+  }
+  // trailing cell/row
+  pushRow();
+  // Trim possible empty last row if file ended with newline
+  if (rows.length && rows[rows.length - 1].every((c) => c === '')) rows.pop();
+  return rows;
 }

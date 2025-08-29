@@ -2,6 +2,54 @@
 (function () {
   const vscode = acquireVsCodeApi();
   let lastTree = null;
+  let lastFocusedId = null;
+
+  function simpleHash(s) {
+    let h = 2166136261 >>> 0; // FNV-1a
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return ('0000000' + h.toString(16)).slice(-8);
+  }
+
+  function captureUiState() {
+    const scrollables = [];
+    const root = document.scrollingElement || document.documentElement;
+    if (root) scrollables.push(root);
+    const eq = document.getElementById('equations');
+    const ch = document.getElementById('charts');
+    const raw = document.getElementById('content');
+    if (eq) scrollables.push(eq);
+    if (ch) scrollables.push(ch);
+    if (raw) scrollables.push(raw);
+    const snaps = scrollables.map((el) => ({ el, left: el.scrollLeft, top: el.scrollTop }));
+    const active = document.activeElement;
+    const activeId = active && active.id ? active.id : null;
+    return { snaps, activeId };
+  }
+
+  function restoreUiState(state) {
+    try {
+      if (!state) return;
+      for (const s of state.snaps || []) {
+        if (!s || !s.el) continue;
+        try { s.el.scrollLeft = s.left; } catch {}
+        try { s.el.scrollTop = s.top; } catch {}
+      }
+      if (state.activeId) {
+        const el = document.getElementById(state.activeId);
+        if (el && typeof el.focus === 'function') {
+          el.focus({ preventScroll: true });
+        }
+      } else if (lastFocusedId) {
+        const el = document.getElementById(lastFocusedId);
+        if (el && typeof el.focus === 'function') {
+          el.focus({ preventScroll: true });
+        }
+      }
+    } catch {}
+  }
 
   /** Find !equation or !chart nodes within the parsed tree. */
   function collectNodes(node, tag, path = []) {
@@ -47,6 +95,11 @@
       const field = document.createElement('div');
       field.className = 'eq-mathfield';
       const mf = document.createElement('math-field');
+      try {
+        const pathKey = JSON.stringify(eq.path || eq._path || eq.__path || []);
+        const hid = 'mf-' + simpleHash(pathKey);
+        mf.id = hid;
+      } catch {}
       mf.setAttribute('readonly', '');
       mf.setAttribute('virtual-keyboard-mode', 'off');
       const latexInput = eq.latex || undefined;
@@ -97,7 +150,7 @@
       return;
     }
   console.log('[RichYAML] renderCharts called. charts found:', charts);
-    charts.forEach((chart, idx) => {
+  charts.forEach((chart, idx) => {
       const card = document.createElement('section');
       card.className = 'chart-card';
       const header = document.createElement('div');
@@ -106,6 +159,11 @@
       card.appendChild(header);
       const chartDiv = document.createElement('div');
       chartDiv.className = 'chart-vega';
+      try {
+        const pathKey = JSON.stringify(chart.path || chart._path || chart.__path || []);
+        const hid = 'ch-' + simpleHash(pathKey);
+        chartDiv.id = hid;
+      } catch {}
       card.appendChild(chartDiv);
       // Build a minimal Vega spec from the !chart node
       const buildSpec = (c) => {
@@ -164,7 +222,7 @@
           marks
         };
       };
-      const vegaSpec = buildSpec(chart);
+  const vegaSpec = buildSpec(chart);
       console.log('[RichYAML] chart -> Vega spec:', vegaSpec);
       // Try to find an interpreter candidate
       const findInterpreter = () => (
@@ -174,7 +232,7 @@
         (window.vegaInterpreter && window.vegaInterpreter.expressionInterpreter)
       );
       const interpreter = findInterpreter();
-  if (window.vega && window.vega.View && interpreter) {
+      if (window.vega && window.vega.View && interpreter) {
         try {
           // Enable AST output for CSP-safe interpreter
           const runtime = window.vega.parse(vegaSpec, null, { ast: true });
@@ -196,6 +254,44 @@
         console.error('[RichYAML] Renderer missing. window.vega:', window.vega, 'interpreter:', interpreter);
       }
       list.appendChild(card);
+
+      // If chart refers to workspace data.file, ask host to resolve and then re-render this card
+      try {
+        const file = chart && chart.data && chart.data.file;
+        if (typeof file === 'string' && file.trim()) {
+          const path = chart.path || chart._path || chart.__path || null;
+          const onMsg = (ev) => {
+            const m = ev.data || {};
+            if (!m || !m.type) return;
+            const samePath = JSON.stringify(m.path) === JSON.stringify(path);
+            if (m.type === 'data:resolved' && samePath) {
+              window.removeEventListener('message', onMsg);
+              try {
+                const updated = Object.assign({}, chart, { data: Object.assign({}, chart.data || {}, { values: Array.isArray(m.values) ? m.values : [] }) });
+                // Rebuild spec and re-render view
+                chartDiv.innerHTML = '';
+                const spec2 = buildSpec(updated);
+                const runtime2 = window.vega.parse(spec2, null, { ast: true });
+                const view2 = new window.vega.View(runtime2, {
+                  renderer: 'canvas', container: chartDiv, hover: true, expr: interpreter
+                });
+                view2.runAsync();
+              } catch (e2) {
+                chartDiv.textContent = 'Chart render error after data load: ' + e2;
+                chartDiv.style.color = 'red';
+              }
+            } else if (m.type === 'data:error' && samePath) {
+              window.removeEventListener('message', onMsg);
+              const err = document.createElement('div');
+              err.style.color = 'red';
+              err.textContent = 'Data error: ' + (m.error || 'unknown');
+              card.appendChild(err);
+            }
+          };
+          window.addEventListener('message', onMsg);
+          vscode.postMessage({ type: 'data:request', path: path, file });
+        }
+      } catch {}
     });
   }
 
@@ -237,7 +333,11 @@
     try {
       const msg = event.data || {};
       if (msg.type === 'document:update') {
-  lastTree = msg.tree;
+        // Capture state to avoid scroll/focus jumps on update
+        const ui = captureUiState();
+        const activeEl = document.activeElement;
+        lastFocusedId = activeEl && activeEl.id ? activeEl.id : lastFocusedId;
+        lastTree = msg.tree;
         const el = document.getElementById('content');
         if (el) {
           let output = '';
@@ -266,10 +366,14 @@
               chartList.appendChild(errorDiv);
             }
             console.error('[RichYAML] Failed to load chart renderer:', err);
+            // Restore UI even on error
+            restoreUiState(ui);
             return;
           }
           console.log('[RichYAML] Vega + interpreter loaded. window.vega:', window.vega);
           renderCharts(msg.tree);
+          // Restore UI after re-render
+          restoreUiState(ui);
         });
       }
     } catch (err) {
@@ -296,8 +400,10 @@
   window.addEventListener('vega-ready', () => {
     try {
       if (lastTree) {
+        const ui = captureUiState();
         console.log('[RichYAML] vega-ready received; re-rendering charts');
         renderCharts(lastTree);
+        restoreUiState(ui);
       }
     } catch (e) {
       console.error('[RichYAML] Error on vega-ready re-render:', e);

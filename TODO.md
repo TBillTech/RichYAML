@@ -74,11 +74,11 @@ These items ensure equations, charts, and future rich types render inline in the
 - Interfaces: Webview security guidance; keyboard/focus management; `asWebviewUri` allowlist.
 	- Implemented: Inline inset HTML sets strict CSP with disabled connect/frame/object/media sources; root container is focusable with role=group; equation editor and chart controls labeled with ARIA. Escape/Ctrl+Enter posts focus:return to host which restores focus to the corresponding line in the editor. README updated.
 
-16) Workspace file resolver for chart data
-- Outcome: Resolve `data.file` CSV/JSON from workspace; parse and deliver to webview.
-- Interfaces: `vscode.workspace.fs.readFile`, CSV/JSON parser; postMessage channel `data:resolved`.
+16) Workspace file resolver for chart data [DONE]
+- Outcome: Resolve `data.file` CSV/JSON/YAML from workspace; parse and deliver to webview/inline insets. Truncate by `maxDataPoints`.
+- Interfaces: `vscode.workspace.fs.readFile`, CSV/JSON/YAML parser; postMessage channel `data:resolved`/`data:error`.
 
-17) Preview synchronization from text edits
+17) Preview synchronization from text edits [DONE]
 - Outcome: On document change, update webview preview without losing scroll/selection.
 - Interfaces: `onDidChangeTextDocument`, debounced `preview:update` message.
 
@@ -193,3 +193,5 @@ S3) Side preview panel (auto-synced)
  - 2025-08-29: Completed MVP Task 13. Added minimal inline chart controls (title, mark, x/y field+type) that write back to YAML with basic validation; README bumped to v0.1.13.
  - 2025-08-29: Completed MVP Task 14. Visibility toggles (show/hide + status bar), performance guardrails (maxInsets, maxDataPoints, debounce, offscreen buffer), and virtualization of inline insets; README bumped to v0.1.14.
  - 2025-08-29: Completed MVP Task 15. Tightened inline inset CSP/allowlist; added ARIA roles and focus traversal; documented limitations. README bumped to v0.1.15.
+ - 2025-08-29: Completed MVP Task 16. Implemented workspace `data.file` resolver (CSV/JSON/YAML) with size cap and messaging for both Custom Preview and inline insets. README bumped to v0.1.16.
+- 2025-08-29: Completed MVP Task 17. Debounced custom preview updates and preserved webview scroll/focus across document changes; inline behavior unchanged. README bumped to v0.1.17.

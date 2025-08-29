@@ -1,4 +1,4 @@
-# RichYAML v0.1.15
+# RichYAML v0.1.17
 VSCode Extension to view/edit YAML with in place rendering of formulas and charts (and more)
 
 YAML as a single, portable “source of truth” with equations stored as MathJSON and declarative charts.
@@ -30,6 +30,7 @@ Limitations and caveats:
 - Very large files or many rich nodes: previews may be virtualized (only render what’s on screen) to keep the editor responsive.
 - External data (`data.file`): loaded by the extension host and streamed to the inset; large CSV/JSON may be truncated based on settings.
 - Accessibility: Insets are focusable and labeled, but screen reader behavior varies by platform. You can turn previews off per editor if needed.
+ - Data resolver: For charts with `data.file`, RichYAML resolves CSV/JSON/YAML from your workspace (paths are relative to the YAML file). CSV must have a header row; JSON/YAML can be an array of objects or `{ values: [...] }`. The number of points sent to inline previews is capped by `richyaml.preview.inline.maxDataPoints`.
 
 Inline insets vs. stable VS Code:
 - True inline webview insets require the proposed API (editorInsets). In stable VS Code builds, this API isn’t enabled, so RichYAML uses a decoration fallback (a compact after-text marker) instead of full inline renders.
