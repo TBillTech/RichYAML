@@ -438,11 +438,20 @@ function getNonce() {
         const nodeType = node.tag === '!equation' ? 'equation' : node.tag === '!chart' ? 'chart' : 'unknown';
         const msg = { type: 'preview:init', nodeType, data, path: node.path };
         inset.webview.postMessage(msg);
-        // Listen for edits from the inset
-    const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
+        // Listen for edits and focus intents from the inset
+        const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
           try {
-      if (m?.type === 'edit:apply' && Array.isArray(m?.path)) {
+            if (m?.type === 'edit:apply' && Array.isArray(m?.path)) {
               await this.applyInlineEdit(doc, m);
+            } else if (m?.type === 'focus:return') {
+              // Move focus back to the editor at the start of this line
+              try {
+                vscode.window.showTextDocument(doc, editor.viewColumn, false).then(() => {
+                  const pos = new vscode.Position(line, 0);
+                  editor.selection = new vscode.Selection(pos, pos);
+                  vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+                });
+              } catch {}
             }
           } catch (e) {
             console.error('[RichYAML] apply edit failed:', e);
@@ -495,17 +504,31 @@ function getNonce() {
     const inlineJsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'inline.js'));
     const csp = [
       `default-src 'none'`,
+      // Images from extension, data URIs, and https (for potential font sprite assets)
       `img-src ${webview.cspSource} https: data:`,
+      // Inline <style> is used for tiny CSS; allow extension and https (MathLive CSS)
       `style-src ${webview.cspSource} https: 'unsafe-inline'`,
+      // Only fonts from extension or https
       `font-src ${webview.cspSource} https:`,
-      `script-src ${webview.cspSource} 'nonce-${nonce}' https:`
+      // Only scripts from extension with nonce, plus https (MathLive CDN). No eval.
+      `script-src ${webview.cspSource} 'nonce-${nonce}' https:`,
+      // Disallow all connections and embeddings
+      `connect-src 'none'`,
+      `frame-src 'none'`,
+      `child-src 'none'`,
+      `media-src 'none'`,
+      `object-src 'none'`,
+      // Base URI not needed
+      `base-uri 'none'`,
+      // Form posting disabled
+      `form-action 'none'`
     ].join('; ');
     return `<!DOCTYPE html><html><head>
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <link rel="stylesheet" href="${mathliveCss}">
 <style>${style}</style>
 </head><body>
-<div id="root"></div>
+<div id="root" role="group" aria-label="RichYAML inline preview" tabindex="0"></div>
 <script nonce="${nonce}" src="${mathliveJs}"></script>
 <script nonce="${nonce}" src="${vegaShimUri}"></script>
 <script nonce="${nonce}" src="${inlineJsUri}"></script>

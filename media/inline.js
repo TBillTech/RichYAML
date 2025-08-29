@@ -19,16 +19,17 @@
 
   function renderEquation(root, data, path) {
     root.innerHTML = '';
-    const title = h('div', { className: 'ry-title', text: data.desc || 'Equation' });
-    const body = h('div', { className: 'ry-body' });
+    const title = h('div', { className: 'ry-title', text: data.desc || 'Equation', role: 'heading', 'aria-level': '3' });
+    const body = h('div', { className: 'ry-body', role: 'group', 'aria-label': 'Equation editor' });
     const mf = document.createElement('math-field');
     // Make editable for two-way MVP
     mf.removeAttribute('readonly');
     mf.setAttribute('virtual-keyboard-mode', 'manual');
+    mf.setAttribute('aria-label', 'Equation latex editor');
     try { mf.value = data.latex ? String(data.latex) : '\\text{MathJSON}'; } catch {}
     body.appendChild(mf);
     if (!data.latex && data.mathjson) {
-      const pre = h('pre', { className: 'ry-json' }, JSON.stringify(data.mathjson, null, 2));
+      const pre = h('pre', { className: 'ry-json', role: 'region', 'aria-label': 'Equation MathJSON' }, JSON.stringify(data.mathjson, null, 2));
       body.appendChild(pre);
     }
     root.appendChild(title);
@@ -42,9 +43,17 @@
     };
     const onInput = () => { clearTimeout(t); t = setTimeout(send, 300); };
     mf.addEventListener('input', onInput);
+    mf.addEventListener('keydown', (e) => {
+      // Accessibility: Esc or Ctrl+Enter returns focus to container/editor
+      if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault();
+        try { (root.closest('[tabindex]') || root).focus(); } catch {}
+        if (vscode) vscode.postMessage({ type: 'focus:return' });
+      }
+    });
     setTimeout(() => {
       if (!customElements.get('math-field')) {
-        const warn = h('div', { className: 'ry-warn', text: 'Math renderer unavailable' });
+        const warn = h('div', { className: 'ry-warn', text: 'Math renderer unavailable', role: 'alert' });
         root.appendChild(warn);
       }
     }, 50);
@@ -69,13 +78,16 @@
 
   function renderChart(root, chart, path) {
     root.innerHTML = '';
-    const title = h('div', { className: 'ry-title', text: chart.title || 'Chart' });
-    const body = h('div', { className: 'ry-body' });
+    const title = h('div', { className: 'ry-title', text: chart.title || 'Chart', role: 'heading', 'aria-level': '3' });
+    const body = h('div', { className: 'ry-body', role: 'group', 'aria-label': 'Chart preview and controls' });
     // -- Minimal controls --
     const controls = h('div', { className: 'ry-controls' });
-    const row = (label, control) => {
-      const wrap = h('div', { className: 'ry-row' });
-      wrap.appendChild(h('label', { className: 'ry-lbl', text: label }));
+    const row = (label, control, id) => {
+      const wrap = h('div', { className: 'ry-row', role: 'group' });
+      const lbl = h('label', { className: 'ry-lbl', text: label, for: id });
+      control.id = id;
+      control.setAttribute('aria-label', label);
+      wrap.appendChild(lbl);
       wrap.appendChild(control);
       return wrap;
     };
@@ -94,21 +106,21 @@
       }
       return el;
     };
-    const markSel = select(['line', 'bar', 'point'], chart.mark || 'line');
-    const titleInp = input(chart.title, 'Title');
-    const xFieldInp = input(chart?.encoding?.x?.field || '', 'x field');
-    const xTypeSel = select(['quantitative', 'nominal', 'temporal', 'ordinal'], (chart?.encoding?.x?.type || 'quantitative'));
-    const yFieldInp = input(chart?.encoding?.y?.field || '', 'y field');
-    const yTypeSel = select(['quantitative', 'nominal', 'temporal', 'ordinal'], (chart?.encoding?.y?.type || 'quantitative'));
-    controls.appendChild(row('Title', titleInp));
-    controls.appendChild(row('Mark', markSel));
-    controls.appendChild(row('X Field', xFieldInp));
-    controls.appendChild(row('X Type', xTypeSel));
-    controls.appendChild(row('Y Field', yFieldInp));
-    controls.appendChild(row('Y Type', yTypeSel));
-    const hint = h('div', { className: 'ry-hint' });
+  const markSel = select(['line', 'bar', 'point'], chart.mark || 'line');
+  const titleInp = input(chart.title, 'Title');
+  const xFieldInp = input(chart?.encoding?.x?.field || '', 'x field');
+  const xTypeSel = select(['quantitative', 'nominal', 'temporal', 'ordinal'], (chart?.encoding?.x?.type || 'quantitative'));
+  const yFieldInp = input(chart?.encoding?.y?.field || '', 'y field');
+  const yTypeSel = select(['quantitative', 'nominal', 'temporal', 'ordinal'], (chart?.encoding?.y?.type || 'quantitative'));
+  controls.appendChild(row('Title', titleInp, 'ry-title'));
+  controls.appendChild(row('Mark', markSel, 'ry-mark'));
+  controls.appendChild(row('X Field', xFieldInp, 'ry-xfield'));
+  controls.appendChild(row('X Type', xTypeSel, 'ry-xtype'));
+  controls.appendChild(row('Y Field', yFieldInp, 'ry-yfield'));
+  controls.appendChild(row('Y Type', yTypeSel, 'ry-ytype'));
+  const hint = h('div', { className: 'ry-hint', role: 'status', 'aria-live': 'polite' });
     controls.appendChild(hint);
-    const target = h('div', { className: 'ry-chart' });
+  const target = h('div', { className: 'ry-chart', role: 'img', 'aria-label': 'Chart preview' });
     body.appendChild(target);
     body.appendChild(controls);
     root.appendChild(title);
@@ -167,6 +179,13 @@
     yFieldInp.addEventListener('change', onYFieldChange);
     yFieldInp.addEventListener('blur', onYFieldChange);
     yTypeSel.addEventListener('change', onYTypeChange);
+    body.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault();
+        try { (root.closest('[tabindex]') || root).focus(); } catch {}
+        if (vscode) vscode.postMessage({ type: 'focus:return' });
+      }
+    });
 
     ensureVega((err) => {
       if (err) {

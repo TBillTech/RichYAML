@@ -1,4 +1,4 @@
-# RichYAML v0.1.14
+# RichYAML v0.1.15
 VSCode Extension to view/edit YAML with in place rendering of formulas and charts (and more)
 
 YAML as a single, portable “source of truth” with equations stored as MathJSON and declarative charts.
@@ -34,6 +34,13 @@ Limitations and caveats:
 Inline insets vs. stable VS Code:
 - True inline webview insets require the proposed API (editorInsets). In stable VS Code builds, this API isn’t enabled, so RichYAML uses a decoration fallback (a compact after-text marker) instead of full inline renders.
 - To try insets during development: run VS Code in Extension Development Host with proposed API enabled, e.g. launch args `--enable-proposed-api TBillTech.richyaml`. Otherwise, use the Custom Preview for rich rendering.
+
+## Security and accessibility (inline insets)
+
+- CSP is strict: default-src 'none'; scripts must be from the extension with a nonce; only MathLive CDN is allowed for scripts/styles. No network fetches from insets; data flows via host messages.
+- Resource allowlist: images/fonts/scripts/styles are constrained to the extension folder via `asWebviewUri` and https for MathLive. `connect-src`, `frame-src`, `object-src`, and `media-src` are disabled.
+- Keyboard: Math editor and chart controls support Escape or Ctrl+Enter to return focus to the YAML editor. Controls are labeled, with ARIA roles for groups, headings, status, and alerts.
+- Known limitations: Diff editors and some screen readers may not announce insets reliably. Use the “Hide Inline Previews” command or switch to the Custom Preview if needed.
 
 ## Document format:
 

@@ -69,9 +69,10 @@ These items ensure equations, charts, and future rich types render inline in the
 - Interfaces: `contributes.commands`, context keys, settings; measurement of render cost; lazy data hydration.
 	- Implemented: Settings `richyaml.preview.inline.maxInsets`, `richyaml.preview.inline.maxDataPoints`, `richyaml.preview.inline.debounceMs`, `richyaml.preview.inline.offscreenBufferLines`. Commands `Show Inline Previews` and `Hide Inline Previews` added. Status bar toggle reflects per-editor state. Virtualized rendering by visible range; chart data truncated to limit; debounced updates on edits/scroll.
 
-15) Inline insets security and accessibility
-- Outcome: Review CSP/URI allowlist for insets; ARIA roles and focus traversal between text and insets; document known limitations (diff editor, folding, screen readers).
+15) Inline insets security and accessibility [DONE]
+- Outcome: Reviewed and tightened CSP/URI allowlist for insets; added ARIA roles and focus traversal (Esc/Ctrl+Enter) between text and insets; documented known limitations (diff editor, folding, screen readers).
 - Interfaces: Webview security guidance; keyboard/focus management; `asWebviewUri` allowlist.
+	- Implemented: Inline inset HTML sets strict CSP with disabled connect/frame/object/media sources; root container is focusable with role=group; equation editor and chart controls labeled with ARIA. Escape/Ctrl+Enter posts focus:return to host which restores focus to the corresponding line in the editor. README updated.
 
 16) Workspace file resolver for chart data
 - Outcome: Resolve `data.file` CSV/JSON from workspace; parse and deliver to webview.
@@ -191,3 +192,4 @@ S3) Side preview panel (auto-synced)
  - 2025-08-29: Completed MVP Task 12. Enabled editable MathLive insets for equations and applied `latex` updates back to YAML via precise range replace or insert; README bumped to v0.1.12.
  - 2025-08-29: Completed MVP Task 13. Added minimal inline chart controls (title, mark, x/y field+type) that write back to YAML with basic validation; README bumped to v0.1.13.
  - 2025-08-29: Completed MVP Task 14. Visibility toggles (show/hide + status bar), performance guardrails (maxInsets, maxDataPoints, debounce, offscreen buffer), and virtualization of inline insets; README bumped to v0.1.14.
+ - 2025-08-29: Completed MVP Task 15. Tightened inline inset CSP/allowlist; added ARIA roles and focus traversal; documented limitations. README bumped to v0.1.15.
