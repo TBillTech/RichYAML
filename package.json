@@ -12,6 +12,9 @@
   "engines": {
     "vscode": "^1.90.0"
   },
+  "enabledApiProposals": [
+    "editorInsets"
+  ],
   "categories": [
     "Other"
   ],
@@ -32,6 +35,11 @@
             "default": "inline",
             "enum": ["inline", "custom"],
             "markdownDescription": "Choose how RichYAML previews show by default: inline in the YAML editor using insets, or via the Custom Editor."
+          },
+          "richyaml.preview.inline.experimentalInsets": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Use the proposed editorInsets API for inline previews (requires running VS Code with --enable-proposed-api TBillTech.richyaml). When disabled, a decoration fallback is used."
           },
           "richyaml.preview.inline.maxInsets": {
             "type": "number",

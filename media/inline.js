@@ -19,8 +19,8 @@
 
   function renderEquation(root, data, path) {
     root.innerHTML = '';
-    const title = h('div', { className: 'ry-title', text: data.desc || 'Equation', role: 'heading', 'aria-level': '3' });
-    const body = h('div', { className: 'ry-body', role: 'group', 'aria-label': 'Equation editor' });
+    // Keep the equation very compact: no title; just the math field
+    const body = h('div', { className: 'ry-body ry-body-eq', role: 'group', 'aria-label': 'Equation editor' });
     const mf = document.createElement('math-field');
     // Make editable for two-way MVP
     mf.removeAttribute('readonly');
@@ -32,16 +32,26 @@
       const pre = h('pre', { className: 'ry-json', role: 'region', 'aria-label': 'Equation MathJSON' }, JSON.stringify(data.mathjson, null, 2));
       body.appendChild(pre);
     }
-    root.appendChild(title);
     root.appendChild(body);
-    // Debounced change -> host edit apply
+  // Debounced change -> host edit apply
     let t;
+    let tsz;
     const send = () => {
       if (!vscode) return;
       const payload = { type: 'edit:apply', path, key: 'latex', edit: 'set', value: mf.value || '' };
       vscode.postMessage(payload);
     };
-    const onInput = () => { clearTimeout(t); t = setTimeout(send, 300); };
+    const postSizeSoon = () => {
+      clearTimeout(tsz);
+    tsz = setTimeout(() => {
+        try {
+          const rect = root.getBoundingClientRect();
+      const desired = Math.ceil(rect.height);
+      if (vscode) vscode.postMessage({ type: 'size', heightPx: desired });
+        } catch {}
+      }, 16);
+    };
+    const onInput = () => { clearTimeout(t); t = setTimeout(send, 200); postSizeSoon(); };
     mf.addEventListener('input', onInput);
     mf.addEventListener('keydown', (e) => {
       // Accessibility: Esc or Ctrl+Enter returns focus to container/editor
@@ -56,6 +66,15 @@
         const warn = h('div', { className: 'ry-warn', text: 'Math renderer unavailable', role: 'alert' });
         root.appendChild(warn);
       }
+      // Measure and notify host to tighten inset height
+      postSizeSoon();
+      // Track subsequent size changes
+      try {
+        if ('ResizeObserver' in window) {
+          const ro = new ResizeObserver(() => postSizeSoon());
+          ro.observe(root);
+        }
+      } catch {}
     }, 50);
   }
 
@@ -78,8 +97,8 @@
 
   function renderChart(root, chart, path) {
     root.innerHTML = '';
-    const title = h('div', { className: 'ry-title', text: chart.title || 'Chart', role: 'heading', 'aria-level': '3' });
-    const body = h('div', { className: 'ry-body', role: 'group', 'aria-label': 'Chart preview and controls' });
+  const title = h('div', { className: 'ry-title', text: chart.title || 'Chart', role: 'heading', 'aria-level': '3' });
+  const body = h('div', { className: 'ry-body ry-body-chart', role: 'group', 'aria-label': 'Chart preview and controls' });
     // -- Minimal controls --
     const controls = h('div', { className: 'ry-controls' });
     const row = (label, control, id) => {
@@ -191,6 +210,11 @@
     const maybeRequestData = (cb) => {
       const file = chart && chart.data && chart.data.file;
       if (vscode && typeof file === 'string' && file.trim()) {
+        // Remove any previous data listener to avoid stacking
+        if (root.__dataListener) {
+          try { window.removeEventListener('message', root.__dataListener); } catch {}
+          root.__dataListener = null;
+        }
         const onMsg = (ev) => {
           const m = ev.data || {};
           if (!m || !m.type) return;
@@ -205,11 +229,20 @@
             cb(new Error(m.error || 'data error'));
           }
         };
+        root.__dataListener = onMsg;
         window.addEventListener('message', onMsg);
         vscode.postMessage({ type: 'data:request', path, file });
       } else {
         cb(null, chart);
       }
+    };
+
+    const postSizeSoon = () => {
+      try {
+        const rect = root.getBoundingClientRect();
+        const h = Math.ceil(rect.height);
+        if (vscode) vscode.postMessage({ type: 'size', heightPx: h });
+      } catch {}
     };
 
     ensureVega((err) => {
@@ -254,7 +287,17 @@
           const runtime = window.vega.parse(spec, null, { ast: true });
           const interp = window.__vegaExpressionInterpreter || window.vega.expressionInterpreter;
           const view = new window.vega.View(runtime, { renderer: 'canvas', container: target, hover: true, expr: interp });
-          view.runAsync();
+          view.runAsync().then(() => {
+            // Report size after render
+            postSizeSoon();
+            // Observe subsequent changes
+            try {
+              if ('ResizeObserver' in window) {
+                const ro = new ResizeObserver(() => postSizeSoon());
+                ro.observe(root);
+              }
+            } catch {}
+          });
         } catch (e) {
           target.textContent = 'Chart render error: ' + e.message;
           target.style.color = 'red';
@@ -269,7 +312,7 @@
 
   function onMessage(ev) {
     const msg = ev.data || {};
-    if (msg.type !== 'preview:init') return;
+    if (msg.type !== 'preview:init' && msg.type !== 'preview:update') return;
     const root = document.getElementById('root');
     if (!root) return;
     if (msg.nodeType === 'equation') renderEquation(root, msg.data, msg.path);

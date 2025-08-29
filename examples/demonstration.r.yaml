@@ -12,10 +12,7 @@ meta:
 # True anomaly (ν) demo. We store canonical MathJSON; LaTeX is optional.
 true_anomaly: !equation
   desc: "True anomaly ν(t) via Kepler's equation (illustrative)."
-  latex: 
-    |
-      M = n (t - t_0),\quad M = E - e\sin E,\quad 
-      \nu = 2\arctan\left(\sqrt{\frac{1+e}{1-e}}\,\tan\frac{E}{2}\right)
+  latex: "M=n(t-t_0),\\quad M=E-e\\sin E,\\quad\\nu=2\\arctan\\left(\\sqrt{\\frac{1+e}{1-e}}\\,\\tan\\frac{E}{2}\\right)"
   mathjson:
     fn: [
       "List",

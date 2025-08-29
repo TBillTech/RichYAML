@@ -267,11 +267,13 @@ function getNonce() {
   private disposables: vscode.Disposable[] = [];
   private perDocState = new Map<string, {
     enabled: boolean;
-    insets: any[];
+    // Reuse insets per node path to avoid churn and listener leaks
+    insets: Map<string, { line: number; dispose: () => void; post: (msg: any) => Thenable<boolean> } >;
     decorationType?: vscode.TextEditorDecorationType;
     debounce?: NodeJS.Timeout;
     lastTextVersion?: number;
-  statusBar?: vscode.StatusBarItem;
+    lastVisible?: { start: number; end: number };
+    statusBar?: vscode.StatusBarItem;
   }>();
 
   private richTagRegex = /!(equation|chart)\b/;
@@ -339,9 +341,10 @@ function getNonce() {
     const mode = vscode.workspace.getConfiguration('richyaml').get<string>('preview.mode', 'inline');
     if (st?.enabled) {
       // Re-render on switch to ensure insets attach to correct editor instance
-      this.renderForEditor(ed);
+  this.renderForEditor(ed);
+  setTimeout(() => { try { this.renderForEditor(ed); } catch {} }, 150);
     } else if (mode === 'inline' && this.isRichYamlDoc(ed.document)) {
-      this.enableForEditor(ed);
+  this.enableForEditor(ed);
     }
   }
 
@@ -368,8 +371,9 @@ function getNonce() {
   status.tooltip = 'Click to hide inline previews for this editor';
   status.command = 'richyaml.hideInlinePreviews';
   status.show();
-  this.perDocState.set(key, { enabled: true, insets: [], statusBar: status });
-    this.renderForEditor(editor);
+  this.perDocState.set(key, { enabled: true, insets: new Map(), statusBar: status });
+  this.renderForEditor(editor);
+  setTimeout(() => { try { this.renderForEditor(editor); } catch {} }, 150);
   }
 
   private disableForEditor(editor: vscode.TextEditor) {
@@ -381,7 +385,7 @@ function getNonce() {
   status.tooltip = 'Click to show inline previews for this editor';
   status.command = 'richyaml.showInlinePreviews';
   status.show();
-  this.perDocState.set(key, { enabled: false, insets: [], statusBar: status });
+  this.perDocState.set(key, { enabled: false, insets: new Map(), statusBar: status });
     // Also clear decorations
     try {
       editor.setDecorations(this.getOrCreateDecorationType(key), []);
@@ -391,8 +395,8 @@ function getNonce() {
   private cleanupForKey(key: string) {
     const st = this.perDocState.get(key);
     if (st) {
-      st.insets.forEach(i => i.dispose());
-      st.insets = [];
+      st.insets.forEach(i => { try { i.dispose(); } catch {} });
+      st.insets.clear();
       if (st.decorationType) {
         st.decorationType.dispose();
         st.decorationType = undefined;
@@ -405,6 +409,7 @@ function getNonce() {
         clearTimeout(st.debounce);
         st.debounce = undefined;
       }
+      st.lastVisible = undefined;
     }
   }
 
@@ -423,10 +428,11 @@ function getNonce() {
     const key = doc.uri.toString();
     const st = this.perDocState.get(key);
     if (!st || !st.enabled) return;
-
-  // Dispose existing insets before recreating
-  st.insets.forEach(i => i.dispose());
-  st.insets = [];
+    const anyVscode: any = vscode as any;
+    const allowProposed = !!vscode.workspace
+      .getConfiguration('richyaml')
+      .get('preview.inline.experimentalInsets', false);
+    const canInset = allowProposed && typeof anyVscode.window?.createWebviewTextEditorInset === 'function';
 
   // Use AST→range mapping for accuracy
   const text = doc.getText();
@@ -448,50 +454,75 @@ function getNonce() {
       .filter((ln, idx, arr) => arr.indexOf(ln) === idx)
       .sort((a, b) => a - b);
 
-    // Try proposed API first
-    const anyVscode: any = vscode as any;
-    const canInset = typeof anyVscode.window?.createWebviewTextEditorInset === 'function';
-    if (canInset && parsed.ok) {
+    // Try proposed API first, reusing insets
+  if (canInset && parsed.ok) {
+      const nextKeys = new Set<string>();
       for (const node of visibleNodes) {
+        const keyPath = JSON.stringify(node.path);
+        nextKeys.add(keyPath);
+        const cur = st.insets.get(keyPath);
         const pos = doc.positionAt(node.range.start);
         const line = pos.line;
-        const inset = anyVscode.window.createWebviewTextEditorInset(editor, line, 18, { enableScripts: true, localResourceRoots: [this.context.extensionUri] });
-        inset.webview.html = this.buildInlineNodeHtml(inset.webview);
+        const nodeType = node.tag === '!equation' ? 'equation' : node.tag === '!chart' ? 'chart' : 'unknown';
         const dataRaw = this.resolveNodeData(parsed as any, node);
         const data = this.applyDataGuards(dataRaw, maxPts);
-        const nodeType = node.tag === '!equation' ? 'equation' : node.tag === '!chart' ? 'chart' : 'unknown';
-        const msg = { type: 'preview:init', nodeType, data, path: node.path };
-        inset.webview.postMessage(msg);
-        // Listen for edits and focus intents from the inset
-    const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
-          try {
-            if (m?.type === 'edit:apply' && Array.isArray(m?.path)) {
-              await this.applyInlineEdit(doc, m);
-            } else if (m?.type === 'focus:return') {
-              // Move focus back to the editor at the start of this line
-              try {
-                vscode.window.showTextDocument(doc, editor.viewColumn, false).then(() => {
-                  const pos = new vscode.Position(line, 0);
-                  editor.selection = new vscode.Selection(pos, pos);
-                  vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
-                });
-              } catch {}
-      } else if (m?.type === 'data:request') {
-              const file = String(m?.file || '');
-              const cfg = vscode.workspace.getConfiguration('richyaml');
-              const maxPts = Math.max(0, Number(cfg.get('preview.inline.maxDataPoints', 1000)) || 0);
-              try {
-                const values = await resolveDataFileRelative(doc.uri, file, maxPts);
-                inset.webview.postMessage({ type: 'data:resolved', path: m?.path, file, values });
-              } catch (e: any) {
-                inset.webview.postMessage({ type: 'data:error', path: m?.path, file, error: e?.message || String(e) });
+        const payload = { type: cur ? 'preview:update' : 'preview:init', nodeType, data, path: node.path };
+
+    if (cur && cur.line === line) {
+          // Reuse existing inset, just update (fire and forget)
+          try { cur.post(payload); } catch {}
+        } else {
+          // Need to (re)create
+          if (cur) { try { cur.dispose(); } catch {} st.insets.delete(keyPath); }
+          // Start with a very small height; we'll resize after measuring content
+          // Use a slightly larger initial height for charts
+          const initialLines = nodeType === 'chart' ? 12 : 3;
+          const inset = anyVscode.window.createWebviewTextEditorInset(editor, line, initialLines, { enableScripts: true, localResourceRoots: [this.context.extensionUri] });
+          inset.webview.html = this.buildInlineNodeHtml(inset.webview);
+          const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
+            try {
+              if (m?.type === 'edit:apply' && Array.isArray(m?.path)) {
+                await this.applyInlineEdit(doc, m);
+              } else if (m?.type === 'focus:return') {
+                try {
+                  vscode.window.showTextDocument(doc, editor.viewColumn, false).then(() => {
+                    const pos2 = new vscode.Position(line, 0);
+                    editor.selection = new vscode.Selection(pos2, pos2);
+                    vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+                  });
+                } catch {}
+      } else if (m?.type === 'size' && (typeof m?.heightPx === 'number' || typeof m?.height === 'number')) {
+        // Convert pixel height from webview to editor line units
+        const px = Math.floor(Number(m.heightPx ?? m.height));
+        const lines = this.pxToEditorLines(px, editor);
+        // Clamp based on node type: equations are compact, charts can be taller
+        const minL = nodeType === 'chart' ? 6 : 1;
+        const maxL = nodeType === 'chart' ? 40 : 12;
+        const clamped = Math.max(minL, Math.min(maxL, lines));
+        try { inset.height = clamped; } catch {}
+              } else if (m?.type === 'data:request') {
+                const file = String(m?.file || '');
+                const cfg2 = vscode.workspace.getConfiguration('richyaml');
+                const maxPts2 = Math.max(0, Number(cfg2.get('preview.inline.maxDataPoints', 1000)) || 0);
+                try {
+                  const values = await resolveDataFileRelative(doc.uri, file, maxPts2);
+                  inset.webview.postMessage({ type: 'data:resolved', path: m?.path, file, values });
+                } catch (e: any) {
+                  inset.webview.postMessage({ type: 'data:error', path: m?.path, file, error: e?.message || String(e) });
+                }
               }
+            } catch (e) {
+              console.error('[RichYAML] inline message failed:', e);
             }
-          } catch (e) {
-            console.error('[RichYAML] apply edit failed:', e);
-          }
-        });
-        st.insets.push({ dispose: () => { try { sub.dispose(); } catch {} try { inset.dispose(); } catch {} } });
+          });
+          // Send initial payload
+          inset.webview.postMessage(payload);
+      st.insets.set(keyPath, { line, dispose: () => { try { sub.dispose(); } catch {} try { inset.dispose(); } catch {} }, post: (msg) => inset.webview.postMessage(msg) });
+        }
+      }
+      // Dispose any insets not needed
+      for (const [k, v] of Array.from(st.insets.entries())) {
+        if (!nextKeys.has(k)) { try { v.dispose(); } catch {} st.insets.delete(k); }
       }
     } else {
       // Decoration fallback: show an after content marker
@@ -509,6 +540,9 @@ function getNonce() {
       editor.setDecorations(decoType, decos);
       st.decorationType = decoType;
     }
+
+    st.lastTextVersion = doc.version;
+    st.lastVisible = { start: startLine, end: endLine };
   }
 
   private onVisibleRangeChanged(editor: vscode.TextEditor) {
@@ -516,25 +550,42 @@ function getNonce() {
     const st = this.perDocState.get(key);
     if (!st?.enabled) return;
     // Re-render cheaply on scroll
+    const visible = editor.visibleRanges?.[0];
+    if (!visible) return;
+    const cur = { start: visible.start.line, end: visible.end.line };
+    const prev = st.lastVisible;
+    // Only update if we moved > 2 lines or ranges don’t overlap
+    const movedEnough = !prev || Math.abs(cur.start - prev.start) > 2 || Math.abs(cur.end - prev.end) > 2;
+    if (!movedEnough) return;
     const cfg = vscode.workspace.getConfiguration('richyaml');
     const delay = Math.max(0, Number(cfg.get('preview.inline.debounceMs', 150)) || 0);
     if (st.debounce) clearTimeout(st.debounce);
-    st.debounce = setTimeout(() => this.renderForEditor(editor), Math.min(50, delay));
+    st.debounce = setTimeout(() => this.renderForEditor(editor), Math.max(100, Math.min(300, delay)));
   }
 
   private buildInlineNodeHtml(webview: vscode.Webview): string {
     const nonce = getNonce();
     const style = [
       `:root{color-scheme:var(--vscode-colorScheme, light dark)}`,
-      `body{margin:0;font:12px/1.4 var(--vscode-editor-font-family);color:var(--vscode-foreground);}`,
-      `.ry-title{font-weight:600;margin:6px 8px 4px 8px}`,
-      `.ry-body{margin:0 8px 8px 8px}`,
+  `body{margin:0;font:12px/1.35 var(--vscode-editor-font-family);color:var(--vscode-foreground);}`,
+  `.ry-title{font-weight:600;margin:2px 6px 2px 6px}`,
+  `.ry-body{margin:0 6px 4px 6px}`,
+  `.ry-body-eq{padding:0; margin:0 6px 2px 6px}`,
+  `.ry-body-eq math-field{display:inline-block; min-height:0; padding:0; --ML__spacing:0; line-height:1;}`,
+  `.ry-body-chart{margin-top:4px}`,
       `.ry-json{max-height:160px;overflow:auto;background:var(--vscode-editor-inactiveSelectionBackground);padding:6px;border-radius:4px}`,
       `.ry-chart{min-height:80px}`
     ].join('\n');
     const mathliveCss = `https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive-static.css`;
     const mathliveJs = `https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.min.js`;
-    const vegaShimUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vega-shim.js'));
+  const vegaShimUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vega-shim.js'));
+  // Prefer local vendor bundles if available (built by prebuild script)
+  const vegaLocalFs = path.join(this.context.extensionPath, 'media', 'vendor', 'vega.min.js');
+  const interpLocalFs = path.join(this.context.extensionPath, 'media', 'vendor', 'vega-interpreter.min.js');
+  const hasLocalVega = fs.existsSync(vegaLocalFs);
+  const hasLocalInterp = fs.existsSync(interpLocalFs);
+  const vegaLocalUri = hasLocalVega ? webview.asWebviewUri(vscode.Uri.file(vegaLocalFs)) : undefined;
+  const interpLocalUri = hasLocalInterp ? webview.asWebviewUri(vscode.Uri.file(interpLocalFs)) : undefined;
     const inlineJsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'inline.js'));
     const csp = [
       `default-src 'none'`,
@@ -557,16 +608,28 @@ function getNonce() {
       // Form posting disabled
       `form-action 'none'`
     ].join('; ');
-    return `<!DOCTYPE html><html><head>
+  return `<!DOCTYPE html><html><head>
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <link rel="stylesheet" href="${mathliveCss}">
 <style>${style}</style>
 </head><body>
 <div id="root" role="group" aria-label="RichYAML inline preview" tabindex="0"></div>
 <script nonce="${nonce}" src="${mathliveJs}"></script>
-<script nonce="${nonce}" src="${vegaShimUri}"></script>
+<script nonce="${nonce}" src="${vegaShimUri}"${vegaLocalUri ? ` data-vega="${vegaLocalUri}"` : ''}${interpLocalUri ? ` data-interpreter="${interpLocalUri}"` : ''}></script>
 <script nonce="${nonce}" src="${inlineJsUri}"></script>
 </body></html>`;
+  }
+
+  // Convert pixel height from webview content to editor inset line units
+  private pxToEditorLines(px: number, editor: vscode.TextEditor): number {
+    // Try user/editor config; fall back to a reasonable default
+    const cfg = vscode.workspace.getConfiguration('editor', editor.document);
+    let lineHeightCfg = Number(cfg.get('lineHeight', 0)) || 0; // 0 means compute
+    const fontSize = Math.max(8, Number(cfg.get('fontSize', 14)) || 14);
+    // VS Code computes line height roughly ~1.35 * fontSize when 0
+    const lineHeightPx = lineHeightCfg > 0 ? lineHeightCfg : Math.round(fontSize * 1.35);
+    const lines = Math.ceil(px / Math.max(8, lineHeightPx));
+    return Math.max(1, lines);
   }
   private async applyInlineEdit(doc: vscode.TextDocument, msg: any) {
     // Supports:

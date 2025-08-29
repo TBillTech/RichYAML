@@ -89,9 +89,9 @@ export function findRichNodes(text: string): RichNodeInfo[] {
   try {
     doc = parseDocument(text, { keepSourceTokens: true }) as any;
   } catch {
-    return results;
+    return regexFallback(text);
   }
-  if (doc?.errors?.length) return results;
+  if (doc?.errors?.length) return regexFallback(text);
 
   const visit = (node: any, path: Array<string | number>) => {
     if (!node) return;
@@ -119,6 +119,25 @@ export function findRichNodes(text: string): RichNodeInfo[] {
   const root = (doc as any).contents;
   visit(root, []);
   return results;
+
+  function regexFallback(src: string): RichNodeInfo[] {
+    // Heuristic: scan lines for tags; anchor decoration markers even if YAML is invalid
+    const out: RichNodeInfo[] = [];
+    const tagRe = /!(equation|chart)\b/;
+    let offset = 0;
+    const lines = src.split(/\r?\n/);
+    for (const line of lines) {
+      const m = tagRe.exec(line);
+      if (m) {
+        const start = offset + m.index;
+        const end = start + line.length - m.index; // approximate to line end
+        const tag = m[0].toLowerCase() as '!equation' | '!chart';
+        out.push({ tag, path: [], range: { start, end }, kind: 'unknown' });
+      }
+      offset += line.length + 1; // account for split removing newline
+    }
+    return out;
+  }
 
   function nodeTextRange(n: any): { start: number; end: number } {
     // Prefer CST node range for precise start at the tag line

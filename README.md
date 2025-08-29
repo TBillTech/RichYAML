@@ -18,6 +18,7 @@ Settings and commands (planned/rolling out):
 - `RichYAML: Toggle Inline Previews` — per-editor on/off.
 - `RichYAML: Open Custom Preview` — open the side-by-side/custom view when you need a larger canvas.
  - `RichYAML: Show Inline Previews` / `RichYAML: Hide Inline Previews` — explicit controls for visibility.
+ - `richyaml.preview.inline.experimentalInsets` (default: false) — use the proposed editorInsets API for true inline webviews. Requires launching the Extension Development Host with proposed APIs enabled for this extension. When off (default on stable VS Code), a lightweight decoration fallback shows a marker instead.
 
 Performance guardrails (configurable):
 - `richyaml.preview.inline.maxInsets` (default 12) — cap how many insets render at once.
@@ -35,6 +36,7 @@ Limitations and caveats:
 Inline insets vs. stable VS Code:
 - True inline webview insets require the proposed API (editorInsets). In stable VS Code builds, this API isn’t enabled, so RichYAML uses a decoration fallback (a compact after-text marker) instead of full inline renders.
 - To try insets during development: run VS Code in Extension Development Host with proposed API enabled, e.g. launch args `--enable-proposed-api TBillTech.richyaml`. Otherwise, use the Custom Preview for rich rendering.
+ - Checklist to enable inline insets in dev: (1) set `richyaml.preview.inline.experimentalInsets` to true; (2) launch the Extension Development Host with proposed APIs enabled for `TBillTech.richyaml`. If either is missing, the decoration fallback is used.
 
 ## Security and accessibility (inline insets)
 
@@ -218,6 +220,7 @@ experiment:
   ```
 
 - Press F5 in VS Code to launch the Extension Development Host.
+  - Optional: To test true inline insets, enable the `richyaml.preview.inline.experimentalInsets` setting, and use a launch that passes the proposed API flag for this extension. Without that, inline previews use the decoration fallback; the Custom Preview remains fully functional.
 
 Packaging (optional):
 
