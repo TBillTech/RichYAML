@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://tbilltech.github.io/richyaml.schema.json",
+  "title": "RichYAML",
+  "description": "Schema for RichYAML documents with !equation and !chart nodes.",
+  "type": ["object", "array", "string", "number", "boolean", "null"],
+  "properties": {},
+  "additionalProperties": {
+    "anyOf": [
+      { "$ref": "#/definitions/equation" },
+      { "$ref": "#/definitions/chart" },
+      { "type": ["object", "array", "string", "number", "boolean", "null"] }
+    ]
+  },
+  "definitions": {
+    "equation": {
+      "type": "object",
+      "properties": {
+        "mathjson": { "type": "object", "description": "Canonical MathJSON tree" },
+        "latex": { "type": "string", "description": "Optional LaTeX for authoring/preview" },
+        "desc": { "type": "string", "description": "Optional human-friendly description" }
+      },
+      "required": ["mathjson"],
+      "additionalProperties": true
+    },
+    "chart": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "mark": { "type": "string", "description": "Vega-Lite mark type (e.g., line, bar, point)" },
+        "data": {
+          "oneOf": [
+            { "type": "object", "properties": { "values": { "type": "array" } }, "required": ["values"], "additionalProperties": true },
+            { "type": "object", "properties": { "file": { "type": "string" } }, "required": ["file"], "additionalProperties": true }
+          ]
+        },
+        "encoding": { "type": "object", "description": "Vega-Lite-like encodings for x/y/color/size/etc." },
+        "legend": { "type": "object" },
+        "colors": { "type": "array", "items": { "type": "string" } },
+        "vegaLite": { "type": "object", "description": "Optional advanced override spec" }
+      },
+      "required": ["title", "mark", "data", "encoding"],
+      "additionalProperties": true
+    }
+  }
+}

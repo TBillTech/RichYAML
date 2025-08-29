@@ -34,6 +34,12 @@
         ]
       }
     ],
+    "yamlValidation": [
+      {
+        "fileMatch": ["*.r.yaml", "*.r.yml"],
+        "url": "./schemas/richyaml.schema.json"
+      }
+    ],
     "customEditors": [
       {
         "viewType": "richyaml.editor",

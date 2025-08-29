@@ -32,7 +32,7 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 - Outcome: Render `!chart` nodes using vega-embed with basic mark/encoding/data.
 - Interfaces: `vega`, `vega-lite`, `vega-embed`; data contract mirrors README schema.
 
-8) JSON Schema registration for RichYAML
+8) JSON Schema registration for RichYAML [DONE]
 - Outcome: Ship and register schema; enable validation/completions for `!equation`/`!chart` structures.
 - Interfaces: `yaml.schemas` setting injection; schema file in extension bundle.
 
@@ -129,3 +129,4 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
  - 2025-08-28: Completed MVP Task 4. Added `media/` assets, served via `asWebviewUri`; enforced strict CSP (default-src 'none', nonce'd script, no inline styles) and constrained `localResourceRoots`. Webview loads JS/CSS bundle and message passing (`preview:update`/`preview:request`) verified.
  - 2025-08-28: Completed MVP Task 5. Implemented YAML parse/serialize service using `yaml`; host now posts `document:update` with parsed tree (tags preserved). Webview shows YAML text, parse errors, and a structured preview.
  - 2025-08-28: Completed MVP Task 6. Webview scans parsed tree for `!equation` nodes and renders them as read-only MathLive fields with description headers; added fallback pretty-print for MathJSON when LaTeX absent; updated CSP and styles; README bumped to v0.1.6.
+ - 2025-08-29: Completed MVP Task 8. Added `schemas/richyaml.schema.json` (draft-07) and registered it via `contributes.yamlValidation` for `*.r.yaml`/`*.r.yml`. README bumped to v0.1.8 and version extracted into `src/version.ts` at build.
