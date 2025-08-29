@@ -40,7 +40,7 @@ true_anomaly: !equation
 # Values are illustrative, not ephemerides-accurate.
 earth_mars_distance: !chart
   title: "Earth–Mars Distance (AU)"
-  mark: line
+  mark: "line"
   data:
     values:
       - { t: "2025-01", d_au: 0.78 }
@@ -65,7 +65,7 @@ earth_mars_distance: !chart
 # Chart using external CSV resolved from workspace
 speed_chart_from_file: !chart
   title: "Speed over time (CSV)"
-  mark: line
+  mark: "line"
   data:
     file: data/speed.csv
   encoding:

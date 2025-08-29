@@ -175,41 +175,16 @@
         const yEnc = enc.y || {};
         const xField = xEnc.field || 'x';
         const yField = yEnc.field || 'y';
-        const xType = (xEnc.type || '').toLowerCase();
-        const xScaleType = xType === 'quantitative' ? 'linear' : 'point';
+  const xType = (xEnc.type || '').toLowerCase();
+  const mark = (c.mark || 'line').toString().toLowerCase();
+  // Use band scale for bar charts regardless of x type for visibility/consistency
+  const xScaleType = (mark === 'bar') ? 'band' : (xType === 'quantitative' ? 'linear' : 'point');
         const color = Array.isArray(c.colors) && c.colors.length ? String(c.colors[0]) : undefined;
         const axisX = { orient: 'bottom', scale: 'x' };
         if (xEnc.title) axisX.title = String(xEnc.title);
         const axisY = { orient: 'left', scale: 'y' };
         if (yEnc.title) axisY.title = String(yEnc.title);
-
-        const mark = (c.mark || 'line').toString().toLowerCase();
-        const enterCommon = {
-          x: { scale: 'x', field: xField },
-          y: { scale: 'y', field: yField }
-        };
-        if (color) {
-          // Line uses stroke; point uses fill
-          if (mark === 'point') enterCommon.fill = { value: color };
-          else enterCommon.stroke = { value: color };
-        }
-        const marks = [];
-        if (mark === 'point') {
-          marks.push({
-            type: 'symbol',
-            from: { data: 'table' },
-            encode: { enter: { ...enterCommon, size: { value: 60 } } }
-          });
-        } else {
-          // default to line
-          marks.push({
-            type: 'line',
-            from: { data: 'table' },
-            encode: { enter: { ...enterCommon, strokeWidth: { value: 2 } } }
-          });
-        }
-
-        return {
+        const spec = {
           width,
           height,
           padding: 10,
@@ -219,8 +194,27 @@
             { name: 'y', type: 'linear', nice: true, domain: { data: 'table', field: yField }, range: 'height' }
           ],
           axes: [axisX, axisY],
-          marks
         };
+        // Build marks by mark type
+        if (mark === 'point') {
+          const encEnter = { x: { scale: 'x', field: xField }, y: { scale: 'y', field: yField }, size: { value: 60 } };
+          if (color) encEnter.fill = { value: color };
+          spec.marks = [{ type: 'symbol', from: { data: 'table' }, encode: { enter: encEnter } }];
+  } else if (mark === 'bar' && xScaleType === 'band') {
+          const barEnter = {
+            x: { scale: 'x', field: xField },
+            width: { scale: 'x', band: 1 },
+            y: { scale: 'y', field: yField },
+            y2: { scale: 'y', value: 0 }
+          };
+          if (color) barEnter.fill = { value: color };
+          spec.marks = [{ type: 'rect', from: { data: 'table' }, encode: { enter: barEnter } }];
+        } else {
+          const lineEnter = { x: { scale: 'x', field: xField }, y: { scale: 'y', field: yField }, strokeWidth: { value: 2 } };
+          if (color) lineEnter.stroke = { value: color };
+          spec.marks = [{ type: 'line', from: { data: 'table' }, encode: { enter: lineEnter } }];
+        }
+        return spec;
       };
   const vegaSpec = buildSpec(chart);
       console.log('[RichYAML] chart -> Vega spec:', vegaSpec);

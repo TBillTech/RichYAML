@@ -257,15 +257,14 @@
         const xField = x.field || 'x';
         const yField = y.field || 'y';
         const xType = (x.type || '').toLowerCase();
-        const xScaleType = xType === 'quantitative' ? 'linear' : 'point';
+        const markType = String(c.mark || 'line').toLowerCase();
+        // Use band scale for bar charts regardless of x type for visibility
+        const xScaleType = markType === 'bar' ? 'band' : (xType === 'quantitative' ? 'linear' : 'point');
         const values = Array.isArray(c?.data?.values) ? c.data.values : [];
         const width = Number(c.width) > 0 ? Number(c.width) : 320;
         const height = Number(c.height) > 0 ? Number(c.height) : 160;
         const color = Array.isArray(c.colors) && c.colors.length ? String(c.colors[0]) : undefined;
         const enterCommon = { x: { scale: 'x', field: xField }, y: { scale: 'y', field: yField } };
-        if (color) {
-          if ((c.mark || 'line') === 'point') enterCommon.fill = { value: color }; else enterCommon.stroke = { value: color };
-        }
         const spec = {
           width, height, padding: 8,
           data: [{ name: 'table', values }],
@@ -276,13 +275,34 @@
           axes: [
             { orient: 'bottom', scale: 'x', title: x.title },
             { orient: 'left', scale: 'y', title: y.title }
-          ],
-          marks: [
-            (c.mark || 'line') === 'point'
-              ? { type: 'symbol', from: { data: 'table' }, encode: { enter: { ...enterCommon, size: { value: 60 } } } }
-              : { type: 'line', from: { data: 'table' }, encode: { enter: { ...enterCommon, strokeWidth: { value: 2 } } } }
           ]
         };
+        // Build marks according to markType
+        if (markType === 'point') {
+          const encEnter = { ...enterCommon, size: { value: 60 } };
+          if (color) encEnter.fill = { value: color };
+          spec.marks = [
+            { type: 'symbol', from: { data: 'table' }, encode: { enter: encEnter } }
+          ];
+        } else if (markType === 'bar' && xScaleType === 'band') {
+          const barEnter = {
+            x: { scale: 'x', field: xField },
+            width: { scale: 'x', band: 1 },
+            y: { scale: 'y', field: yField },
+            y2: { scale: 'y', value: 0 }
+          };
+          if (color) barEnter.fill = { value: color };
+          spec.marks = [
+            { type: 'rect', from: { data: 'table' }, encode: { enter: barEnter } }
+          ];
+        } else {
+          // default to line (including bar+quantitative x fallback)
+          const lineEnter = { ...enterCommon, strokeWidth: { value: 2 } };
+          if (color) lineEnter.stroke = { value: color };
+          spec.marks = [
+            { type: 'line', from: { data: 'table' }, encode: { enter: lineEnter } }
+          ];
+        }
         try {
           const runtime = window.vega.parse(spec, null, { ast: true });
           const interp = window.__vegaExpressionInterpreter || window.vega.expressionInterpreter;
