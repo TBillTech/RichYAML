@@ -1,27 +1,25 @@
 /* Webview bootstrap for RichYAML preview (MVP) */
 (function () {
   const vscode = acquireVsCodeApi();
+  let lastTree = null;
 
-  /** Find !equation nodes within the parsed tree. Supports shapes produced by yamlService.toPlainWithTags */
-  function collectEquations(node, path = []) {
+  /** Find !equation or !chart nodes within the parsed tree. */
+  function collectNodes(node, tag, path = []) {
     const out = [];
     const isObj = node && typeof node === 'object' && !Array.isArray(node);
-    if (isObj && node.$tag === '!equation') {
-      const mathjson = node.mathjson ?? node.$value ?? null;
-      const latex = node.latex ?? null;
-      const desc = node.desc ?? null;
-      out.push({ path, mathjson, latex, desc });
+    if (isObj && node.$tag === tag) {
+      out.push({ path, ...node });
     }
     // Recurse
     if (Array.isArray(node)) {
-      node.forEach((it, i) => out.push(...collectEquations(it, path.concat([i]))));
+      node.forEach((it, i) => out.push(...collectNodes(it, tag, path.concat([i]))));
     } else if (isObj) {
       for (const [k, v] of Object.entries(node)) {
         if (k === '$tag' || k === '$items' || k === '$value') continue;
-        out.push(...collectEquations(v, path.concat([k])));
+        out.push(...collectNodes(v, tag, path.concat([k])));
       }
       if (node.$items && Array.isArray(node.$items)) {
-        node.$items.forEach((it, i) => out.push(...collectEquations(it, path.concat(['$items', i]))));
+        node.$items.forEach((it, i) => out.push(...collectNodes(it, tag, path.concat(['$items', i]))));
       }
     }
     return out;
@@ -31,7 +29,7 @@
     const list = document.getElementById('equations');
     if (!list) return;
     list.innerHTML = '';
-    const equations = collectEquations(tree);
+    const equations = collectNodes(tree, '!equation');
     if (!equations.length) {
       const empty = document.createElement('div');
       empty.className = 'eq-empty';
@@ -39,16 +37,13 @@
       list.appendChild(empty);
       return;
     }
-
-  equations.forEach((eq, idx) => {
+    equations.forEach((eq, idx) => {
       const card = document.createElement('section');
       card.className = 'eq-card';
-
       const header = document.createElement('div');
       header.className = 'eq-header';
       header.textContent = eq.desc || `Equation ${idx + 1}`;
       card.appendChild(header);
-
       const field = document.createElement('div');
       field.className = 'eq-mathfield';
       const mf = document.createElement('math-field');
@@ -56,10 +51,8 @@
       mf.setAttribute('virtual-keyboard-mode', 'off');
       const latexInput = eq.latex || undefined;
       if (latexInput) {
-        // Set immediately; the web component will pick it up when upgraded.
         try { mf.value = String(latexInput); } catch {}
       } else {
-        // No LaTeX: show a placeholder and pretty-print MathJSON below.
         try { mf.value = '\\text{MathJSON node}'; } catch {}
         if (eq.mathjson) {
           const pre = document.createElement('pre');
@@ -70,8 +63,6 @@
       }
       field.appendChild(mf);
       card.appendChild(field);
-
-      // If MathLive failed to load, provide a small fallback text.
       setTimeout(() => {
         if (!customElements.get('math-field')) {
           const warn = document.createElement('div');
@@ -80,35 +71,238 @@
           card.appendChild(warn);
         }
       }, 200);
-
       list.appendChild(card);
     });
   }
 
+  // --- Chart rendering (Vega v6 + vega-interpreter) ---
+  function renderCharts(tree) {
+    const containerId = 'charts';
+    const list = document.getElementById(containerId);
+    if (!list) {
+      console.error('[RichYAML] Chart container not found in DOM.');
+      return;
+    }
+    // Always show a visible placeholder for the chart area
+    list.style.minHeight = '80px';
+    list.style.border = '2px dashed #888';
+    list.style.marginBottom = '12px';
+    list.innerHTML = '';
+    var charts = collectNodes(tree, '!chart');
+    if (!charts.length) {
+      const empty = document.createElement('div');
+      empty.className = 'chart-empty';
+      empty.textContent = 'No !chart nodes found (placeholder)';
+      list.appendChild(empty);
+      return;
+    }
+  console.log('[RichYAML] renderCharts called. charts found:', charts);
+    charts.forEach((chart, idx) => {
+      const card = document.createElement('section');
+      card.className = 'chart-card';
+      const header = document.createElement('div');
+      header.className = 'chart-header';
+      header.textContent = chart.title || `Chart ${idx + 1}`;
+      card.appendChild(header);
+      const chartDiv = document.createElement('div');
+      chartDiv.className = 'chart-vega';
+      card.appendChild(chartDiv);
+      // Build a minimal Vega spec from the !chart node
+      const buildSpec = (c) => {
+        const width = Number(c.width) > 0 ? Number(c.width) : 360;
+        const height = Number(c.height) > 0 ? Number(c.height) : 180;
+        const dataValues = c?.data?.values && Array.isArray(c.data.values) ? c.data.values : [];
+        const enc = c?.encoding || {};
+        const xEnc = enc.x || {};
+        const yEnc = enc.y || {};
+        const xField = xEnc.field || 'x';
+        const yField = yEnc.field || 'y';
+        const xType = (xEnc.type || '').toLowerCase();
+        const xScaleType = xType === 'quantitative' ? 'linear' : 'point';
+        const color = Array.isArray(c.colors) && c.colors.length ? String(c.colors[0]) : undefined;
+        const axisX = { orient: 'bottom', scale: 'x' };
+        if (xEnc.title) axisX.title = String(xEnc.title);
+        const axisY = { orient: 'left', scale: 'y' };
+        if (yEnc.title) axisY.title = String(yEnc.title);
+
+        const mark = (c.mark || 'line').toString().toLowerCase();
+        const enterCommon = {
+          x: { scale: 'x', field: xField },
+          y: { scale: 'y', field: yField }
+        };
+        if (color) {
+          // Line uses stroke; point uses fill
+          if (mark === 'point') enterCommon.fill = { value: color };
+          else enterCommon.stroke = { value: color };
+        }
+        const marks = [];
+        if (mark === 'point') {
+          marks.push({
+            type: 'symbol',
+            from: { data: 'table' },
+            encode: { enter: { ...enterCommon, size: { value: 60 } } }
+          });
+        } else {
+          // default to line
+          marks.push({
+            type: 'line',
+            from: { data: 'table' },
+            encode: { enter: { ...enterCommon, strokeWidth: { value: 2 } } }
+          });
+        }
+
+        return {
+          width,
+          height,
+          padding: 10,
+          data: [{ name: 'table', values: dataValues }],
+          scales: [
+            { name: 'x', type: xScaleType, domain: { data: 'table', field: xField }, range: 'width' },
+            { name: 'y', type: 'linear', nice: true, domain: { data: 'table', field: yField }, range: 'height' }
+          ],
+          axes: [axisX, axisY],
+          marks
+        };
+      };
+      const vegaSpec = buildSpec(chart);
+      console.log('[RichYAML] chart -> Vega spec:', vegaSpec);
+      // Try to find an interpreter candidate
+      const findInterpreter = () => (
+        window.__vegaExpressionInterpreter ||
+        (window.vega && window.vega.expressionInterpreter) ||
+        window.expressionInterpreter ||
+        (window.vegaInterpreter && window.vegaInterpreter.expressionInterpreter)
+      );
+      const interpreter = findInterpreter();
+  if (window.vega && window.vega.View && interpreter) {
+        try {
+          // Enable AST output for CSP-safe interpreter
+          const runtime = window.vega.parse(vegaSpec, null, { ast: true });
+          const view = new window.vega.View(runtime, {
+            renderer: 'canvas',
+            container: chartDiv,
+            hover: true,
+            expr: interpreter
+          });
+          view.runAsync();
+        } catch (err) {
+          chartDiv.textContent = 'Chart render error: ' + err;
+          chartDiv.style.color = 'red';
+          console.error('[RichYAML] Chart render error (Vega v6 + interpreter):', err, vegaSpec, chart);
+        }
+      } else {
+        chartDiv.textContent = 'Chart renderer not available (Vega/interpreter missing)';
+        chartDiv.style.color = 'red';
+        console.error('[RichYAML] Renderer missing. window.vega:', window.vega, 'interpreter:', interpreter);
+      }
+      list.appendChild(card);
+    });
+  }
+
+  // Wait for the vega-shim module to provide Vega + interpreter
+  function loadVegaEmbed(cb) {
+    if (window.vega && (window.vega.expressionInterpreter || window.__vegaExpressionInterpreter)) return cb();
+    let doneCalled = false;
+    const done = (err) => {
+      if (doneCalled) return;
+      doneCalled = true;
+      window.removeEventListener('vega-ready', onReady);
+      clearTimeout(timeoutId);
+      clearInterval(pollId);
+      cb(err);
+    };
+    const onReady = () => {
+      if (window.vega && (window.vega.expressionInterpreter || window.__vegaExpressionInterpreter)) {
+        done();
+      }
+    };
+    window.addEventListener('vega-ready', onReady);
+    // Poll as a fallback in case the event fired before listener was attached
+    const pollId = setInterval(() => {
+      if (window.vega && (window.vega.expressionInterpreter || window.__vegaExpressionInterpreter)) {
+        done();
+      }
+    }, 200);
+    // Also set a timeout to fail gracefully if shim can't load (e.g., CDN blocked)
+    const timeoutId = setTimeout(() => {
+      if (window.vega && (window.vega.expressionInterpreter || window.__vegaExpressionInterpreter)) {
+        done();
+      } else {
+        done(new Error('Timed out waiting for Vega module shim'));
+      }
+    }, 10000);
+  }
+
   function handleMessage(event) {
-    const msg = event.data || {};
-    if (msg.type === 'document:update') {
+    try {
+      const msg = event.data || {};
+      if (msg.type === 'document:update') {
+  lastTree = msg.tree;
+        const el = document.getElementById('content');
+        if (el) {
+          let output = '';
+          if (msg.error) {
+            output += `YAML parse error: ${msg.error}\n\n`;
+          }
+          output += msg.text ?? '';
+          output += '\n\n--- Parsed preview ---\n';
+          try {
+            output += JSON.stringify(msg.tree ?? null, null, 2);
+          } catch {
+            output += String(msg.tree);
+          }
+          el.textContent = output;
+        }
+        renderEquations(msg.tree);
+        // Always load Vega + interpreter before rendering charts
+        loadVegaEmbed(function(err) {
+          if (err) {
+            const chartList = document.getElementById('charts');
+            if (chartList) {
+              chartList.innerHTML = '';
+              const errorDiv = document.createElement('div');
+              errorDiv.style.color = 'red';
+              errorDiv.textContent = 'Failed to load chart renderer: ' + err.message;
+              chartList.appendChild(errorDiv);
+            }
+            console.error('[RichYAML] Failed to load chart renderer:', err);
+            return;
+          }
+          console.log('[RichYAML] Vega + interpreter loaded. window.vega:', window.vega);
+          renderCharts(msg.tree);
+        });
+      }
+    } catch (err) {
       const el = document.getElementById('content');
       if (el) {
-        let output = '';
-        if (msg.error) {
-          output += `YAML parse error: ${msg.error}\n\n`;
-        }
-        output += msg.text ?? '';
-        output += '\n\n--- Parsed preview ---\n';
-        try {
-          output += JSON.stringify(msg.tree ?? null, null, 2);
-        } catch {
-          output += String(msg.tree);
-        }
-        el.textContent = output;
+        el.textContent = 'Webview error: ' + (err && err.message ? err.message : String(err));
       }
-      // Render equations section
-      renderEquations(msg.tree);
+      const chartList = document.getElementById('charts');
+      if (chartList) {
+        chartList.innerHTML = '';
+        const errorDiv = document.createElement('div');
+        errorDiv.style.color = 'red';
+        errorDiv.textContent = 'Webview error: ' + (err && err.message ? err.message : String(err));
+        chartList.appendChild(errorDiv);
+      }
+      console.error('[RichYAML] Webview error:', err);
     }
   }
 
+  // Listen for extension -> webview messages
   window.addEventListener('message', handleMessage);
+
+  // If vega-shim finishes after initial load, re-render charts with latest tree
+  window.addEventListener('vega-ready', () => {
+    try {
+      if (lastTree) {
+        console.log('[RichYAML] vega-ready received; re-rendering charts');
+        renderCharts(lastTree);
+      }
+    } catch (e) {
+      console.error('[RichYAML] Error on vega-ready re-render:', e);
+    }
+  });
 
   // Request initial render
   vscode.postMessage({ type: 'preview:request' });

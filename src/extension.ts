@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { RICHYAML_VERSION } from './version';
 import { parseWithTags } from './yamlService';
 
@@ -120,6 +122,20 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'main.js')
     );
+    const vegaShimUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vega-shim.js')
+    );
+    // Optional local vendor fallbacks (if user places files under media/vendor)
+    const vegaLocalFs = path.join(this.context.extensionPath, 'media', 'vendor', 'vega.min.js');
+    const interpLocalFs = path.join(this.context.extensionPath, 'media', 'vendor', 'vega-interpreter.min.js');
+    const hasLocalVega = fs.existsSync(vegaLocalFs);
+    const hasLocalInterp = fs.existsSync(interpLocalFs);
+    const vegaLocalUri = hasLocalVega
+      ? webview.asWebviewUri(vscode.Uri.file(vegaLocalFs))
+      : undefined;
+    const interpLocalUri = hasLocalInterp
+      ? webview.asWebviewUri(vscode.Uri.file(interpLocalFs))
+      : undefined;
     const styleUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'styles.css')
     );
@@ -132,7 +148,7 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
       // Allow fonts from extension and https (MathLive)
       `font-src ${webview.cspSource} https:`,
       // Allow our nonce'd script and https (MathLive runtime)
-      `script-src 'nonce-${nonce}' https:`
+      `script-src ${webview.cspSource} 'nonce-${nonce}' https:`
     ].join('; ');
 
     return /* html */ `<!DOCTYPE html>
@@ -150,12 +166,15 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
   <div class="container">
     <div class="banner">RichYAML Preview ${versionLabel}</div>
     <div id="equations" class="eq-list" aria-label="Rendered equations"></div>
+    <div id="charts" class="chart-list" aria-label="Rendered charts"></div>
     <details class="raw-view"><summary>Raw YAML and parsed tree</summary>
       <pre id="content">Loading…</pre>
     </details>
   </div>
   <!-- MathLive runtime (read-only). Note: loaded from CDN for MVP; will be bundled later. -->
   <script nonce="${nonce}" src="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.min.js"></script>
+  <!-- Load Vega shim first to expose window.vega and expressionInterpreter under CSP -->
+  <script nonce="${nonce}" src="${vegaShimUri}"${vegaLocalUri ? ` data-vega="${vegaLocalUri}"` : ''}${interpLocalUri ? ` data-interpreter="${interpLocalUri}"` : ''}></script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

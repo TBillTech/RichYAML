@@ -53,7 +53,7 @@
     ]
   },
   "scripts": {
-  "prebuild": "node scripts/extract-version.js",
+  "prebuild": "node scripts/extract-version.js && node scripts/bundle-vega.js",
   "build": "tsc -p ./",
   "watch": "npm run prebuild && tsc -watch -p ./",
     "lint": "echo 'No linter configured'",
@@ -66,10 +66,13 @@
     "@types/node": "^20.12.12",
     "@types/vscode": "^1.90.0",
     "@types/yaml": "^1.9.7",
+    "esbuild": "^0.21.5",
     "typescript": "^5.4.5",
     "vsce": "^2.15.0"
   },
   "dependencies": {
+    "vega": "^6.0.0",
+    "vega-interpreter": "^2.0.0",
     "yaml": "^2.4.5"
   }
 }
