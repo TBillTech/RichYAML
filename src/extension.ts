@@ -17,6 +17,11 @@ export function activate(context: vscode.ExtensionContext) {
   // Commands
   context.subscriptions.push(
     vscode.commands.registerCommand('richyaml.toggleInlinePreviews', () => {
+      const ed = vscode.window.activeTextEditor;
+      if (!ed) {
+        vscode.window.showInformationMessage('Inline previews work in the standard Text Editor. Use "Reopen With..." → "Text Editor" on the file, then toggle again.');
+        return;
+      }
       inlineController.toggleForActiveEditor();
     })
   );
@@ -369,32 +374,16 @@ function getNonce() {
       .filter((ln, idx, arr) => arr.indexOf(ln) === idx)
       .sort((a, b) => a - b);
 
-    if (typeof (vscode.window as any).createWebviewTextEditorInset === 'function') {
-      // Use insets with per-node inline webviews
-  for (const node of nodes) {
-        const startLine = doc.positionAt(node.range.start).line;
-        const inset: any = (vscode.window as any).createWebviewTextEditorInset(editor, startLine, 92, {
-          enableScripts: true
-        });
-        inset.webview.options = {
-          enableScripts: true,
-          localResourceRoots: [this.context.extensionUri, vscode.Uri.joinPath(this.context.extensionUri, 'media')]
-        };
-        inset.webview.html = this.buildInlineNodeHtml(inset.webview);
-  const nodeType = node.tag === '!equation' ? 'equation' : 'chart';
-  const data = this.resolveNodeData(parsed, node) ?? this.extractInlineNodeData(doc, node);
-  inset.webview.postMessage({ type: 'preview:init', nodeType, data });
-        st.insets.push(inset);
-      }
-      if (st.decorationType) editor.setDecorations(st.decorationType, []);
-    } else {
+  // Proposed API `createWebviewTextEditorInset` is not enabled in stable.
+  // Use decoration fallback for stable builds.
+  {
       // Decoration fallback: show an after content marker
       const decoType = this.getOrCreateDecorationType(key);
       const decos: vscode.DecorationOptions[] = linesWithTags.map((line) => ({
         range: new vscode.Range(line, Number.MAX_SAFE_INTEGER, line, Number.MAX_SAFE_INTEGER),
         renderOptions: {
           after: {
-            contentText: ' ⟶ RichYAML preview',
+      contentText: ' ⟶ RichYAML preview',
             color: new vscode.ThemeColor('editorCodeLens.foreground'),
             margin: '0 0 0 12px'
           }

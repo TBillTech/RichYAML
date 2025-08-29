@@ -23,6 +23,10 @@ Limitations and caveats:
 - External data (`data.file`): loaded by the extension host and streamed to the inset; large CSV/JSON may be truncated based on settings.
 - Accessibility: Insets are focusable and labeled, but screen reader behavior varies by platform. You can turn previews off per editor if needed.
 
+Inline insets vs. stable VS Code:
+- True inline webview insets require the proposed API (editorInsets). In stable VS Code builds, this API isn’t enabled, so RichYAML uses a decoration fallback (a compact after-text marker) instead of full inline renders.
+- To try insets during development: run VS Code in Extension Development Host with proposed API enabled, e.g. launch args `--enable-proposed-api TBillTech.richyaml`. Otherwise, use the Custom Preview for rich rendering.
+
 ## Document format:
 
 The principle difference between RichYAML and unrestricted YAML is that RichYAML has a set of special types which are rendered nicely in the VSCode extension:

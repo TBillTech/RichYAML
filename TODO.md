@@ -36,7 +36,7 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 - Outcome: Ship and register schema; enable validation/completions for `!equation`/`!chart` structures.
 - Interfaces: `yaml.schemas` setting injection; schema file in extension bundle.
 
-### Inline previews in the YAML editor (critical MVP requirement)
+### Inline previews in the YAML editor 
 
 These items ensure equations, charts, and future rich types render inline in the regular YAML text editor, not only in a side webview/custom editor. The custom editor remains optional for a larger preview but the default experience is the normal YAML editor with inline previews.
 
@@ -83,6 +83,24 @@ These items ensure equations, charts, and future rich types render inline in the
 18) Security review and threat modeling (webview)
 - Outcome: Checklist and fixes for URI handling, sanitization, and isolation.
 - Interfaces: VS Code webview security guidance; CSP; URI allowlist.
+
+### Stable Editor UX (ships without inline insets)
+
+S0) Rich hovers for equations/charts
+- Outcome: Hovering over a `!equation` or `!chart` node shows a rich preview (SVG/PNG) in a Markdown hover, including a short description/title when present. Fast, no webview required.
+- Interfaces: `languages.registerHoverProvider` for YAML/richyaml; render via lightweight renderer that outputs data URIs (MathLive → SVG/PNG snapshot; Vega → toImageURL) or cached assets; theme-aware background; small size budget.
+
+S1) Quick Fix / Code Action: “Edit equation/chart…”
+- Outcome: A code action on the node opens a compact webview editor (MathLive for equations, minimal chart controls) and applies a precise `WorkspaceEdit` back to YAML on save/apply with undo/redo. Handles minor conflicts (reparse+retry) and surfaces errors inline.
+- Interfaces: `languages.registerCodeActionsProvider` (kind: QuickFix/Refactor), `WebviewPanel` or `WebviewView` for the mini editor, `workspace.applyEdit`, YAML CST range mapping from Task 10, schema validation preflight.
+
+S2) CodeLens and gutter badges
+- Outcome: Above each rich node, show CodeLens links: “Preview • Edit”. Optional gutter badges indicate rich content. Clicking Preview focuses/refreshes a pinned side preview for that node; Edit opens the mini editor (S1).
+- Interfaces: `languages.registerCodeLensProvider`, `createTextEditorDecorationType` for gutter icon/after text, commands to open/refresh side preview and edit.
+
+S3) Side preview panel (auto-synced)
+- Outcome: A narrow side panel shows a live preview of the currently selected/nearest rich node while keeping the full YAML visible in the Text Editor. Updates on cursor move/selection and document changes; supports multiple nodes with simple navigation.
+- Interfaces: `window.registerWebviewViewProvider` (contributes.views), message passing `preview:update`, YAML node resolution by cursor (Task 10), debounced updates, CSP-safe rendering using existing renderer.
 
 ## v0.2 Usability
 
