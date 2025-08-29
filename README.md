@@ -3,6 +3,26 @@ VSCode Extension to view/edit YAML with in place rendering of formulas and chart
 
 YAML as a single, portable “source of truth” with equations stored as MathJSON and declarative charts.
 
+## Inline previews in the regular YAML editor
+
+RichYAML’s core requirement is that equations, charts, and other rich displays render inline alongside your YAML text. You keep using the normal YAML editor; RichYAML adds inline “insets” where `!equation` and `!chart` nodes appear. Edits you make in those insets write back to the YAML so the file remains the single source of truth.
+
+- Design default: Inline. The custom editor with a big preview remains optional. While this capability is being rolled out, you can switch modes as needed.
+- Two-way edits: Editing a mathfield updates `mathjson` (and optionally `latex`); basic chart controls update the `encoding`/`title`.
+- Precise mapping: Insets are anchored to the exact node range in the file. If surrounding text changes while you’re editing, RichYAML retries or shows a small conflict banner.
+- Toggle visibility: You can show/hide all inline previews per editor if you just want plain text temporarily.
+
+Settings and commands (planned/rolling out):
+- `richyaml.preview.mode`: `inline` (default) | `custom` — choose inline insets in the YAML editor, or open the Custom Editor as the default.
+- `RichYAML: Toggle Inline Previews` — per-editor on/off.
+- `RichYAML: Open Custom Preview` — open the side-by-side/custom view when you need a larger canvas.
+
+Limitations and caveats:
+- Diff editors and read-only editors may not display interactive insets; RichYAML falls back to static thumbnails or a note.
+- Very large files or many rich nodes: previews may be virtualized (only render what’s on screen) to keep the editor responsive.
+- External data (`data.file`): loaded by the extension host and streamed to the inset; large CSV/JSON may be truncated based on settings.
+- Accessibility: Insets are focusable and labeled, but screen reader behavior varies by platform. You can turn previews off per editor if needed.
+
 ## Document format:
 
 The principle difference between RichYAML and unrestricted YAML is that RichYAML has a set of special types which are rendered nicely in the VSCode extension:

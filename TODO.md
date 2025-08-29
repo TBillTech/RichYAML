@@ -36,73 +36,105 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 - Outcome: Ship and register schema; enable validation/completions for `!equation`/`!chart` structures.
 - Interfaces: `yaml.schemas` setting injection; schema file in extension bundle.
 
-9) Workspace file resolver for chart data
+### Inline previews in the YAML editor (critical MVP requirement)
+
+These items ensure equations, charts, and future rich types render inline in the regular YAML text editor, not only in a side webview/custom editor. The custom editor remains optional for a larger preview but the default experience is the normal YAML editor with inline previews.
+
+9) Default to inline-in-editor mode
+- Outcome: Keep the standard YAML editor and render rich blocks inline using editor insets; make the custom editor an optional command (not default). Provide a setting `richyaml.preview.mode` = `inline` | `custom` (default: `inline`).
+- Interfaces: VS Code configuration (`contributes.configuration`), commands (`contributes.commands`), (proposed/stable) API for editor webview insets or a decoration-based fallback; `registerCustomTextEditorProvider` priority set to `option`.
+
+10) YAML AST → text range mapping
+- Outcome: Reliable mapping from parsed YAML nodes (e.g., `!equation`, `!chart`) to exact document ranges/lines to anchor inline previews and apply edits precisely.
+- Interfaces: `yaml` CST/AST with ranges; incremental reparsing on text edits; `TextDocument` positions; debounce strategy.
+
+11) Inline renderer and lifecycle
+- Outcome: A shared renderer bundle that can run inside inline insets (webview) with strict CSP; deterministic creation/disposal on scroll and edits; no memory leaks.
+- Interfaces: Webview insets (or lightweight decoration fallback rendering images/text), `postMessage` channel: `preview:update`, `data:request`, `schema:issues`; virtualization windowing for many nodes.
+
+12) Two-way editing from inline equation
+- Outcome: Edits in MathLive inset update the underlying YAML (`mathjson`/`latex`) with proper undo/redo grouping and conflict handling when the surrounding text changes.
+- Interfaces: `webview→host` `edit:apply`; `WorkspaceEdit` with range targeting; minimal conflict policy (retry/reparse, drop with banner on hard conflict).
+
+13) Minimal inline chart controls → YAML
+- Outcome: Basic controls in the chart inset (title/mark/encodings dropdowns) that write back to YAML; validate against schema before applying.
+- Interfaces: Same messaging/edit pipeline; schema validation preflight; small UX with keyboard support.
+
+14) Visibility toggles and performance guardrails
+- Outcome: Commands and per-editor toggle to show/hide inline previews; global setting limits (max insets, max dataset size); debounced updates; background disposal when offscreen.
+- Interfaces: `contributes.commands`, context keys, settings; measurement of render cost; lazy data hydration.
+
+15) Inline insets security and accessibility
+- Outcome: Review CSP/URI allowlist for insets; ARIA roles and focus traversal between text and insets; document known limitations (diff editor, folding, screen readers).
+- Interfaces: Webview security guidance; keyboard/focus management; `asWebviewUri` allowlist.
+
+16) Workspace file resolver for chart data
 - Outcome: Resolve `data.file` CSV/JSON from workspace; parse and deliver to webview.
 - Interfaces: `vscode.workspace.fs.readFile`, CSV/JSON parser; postMessage channel `data:resolved`.
 
-10) Preview synchronization from text edits
+17) Preview synchronization from text edits
 - Outcome: On document change, update webview preview without losing scroll/selection.
 - Interfaces: `onDidChangeTextDocument`, debounced `preview:update` message.
 
-11) Security review and threat modeling (webview)
+18) Security review and threat modeling (webview)
 - Outcome: Checklist and fixes for URI handling, sanitization, and isolation.
 - Interfaces: VS Code webview security guidance; CSP; URI allowlist.
 
 ## v0.2 Usability
 
-12) Two-way editing: MathLive → YAML
+19) Two-way editing: MathLive → YAML
 - Outcome: Edits in MathLive update `mathjson` (and optionally `latex`) in the text buffer.
 - Interfaces: `webview.postMessage` → host apply-edit; minimal conflict resolution policy.
 
-13) Two-way editing: Chart controls → YAML
+20) Two-way editing: Chart controls → YAML
 - Outcome: Basic chart panel (title/mark/encodings) updates YAML nodes.
 - Interfaces: Same messaging/edit application as above; validation against schema prior to edit.
 
-14) Schema validation surfacing in preview
+21) Schema validation surfacing in preview
 - Outcome: Show friendly errors/warnings for invalid equation/chart nodes.
 - Interfaces: VS Code diagnostics provider or inline preview banner fed by JSON Schema validation.
 
-15) “Open in Vega Editor” affordance (optional)
+22) “Open in Vega Editor” affordance (optional)
 - Outcome: Button opens current chart spec in Vega Editor in browser.
 - Interfaces: Generate Vega-Lite spec; use vega-embed convenience link; handle data inlined/stripped.
 
-16) Command palette entries and keybindings
+23) Command palette entries and keybindings
 - Outcome: Commands for “Insert Equation,” “Insert Chart,” “Refresh Preview,” etc.
 - Interfaces: `contributes.commands`, `registerCommand`, `keybindings`.
 
-17) Accessibility and keyboard navigation pass
+24) Accessibility and keyboard navigation pass
 - Outcome: Navigable webview UI, ARIA roles, focus management.
 - Interfaces: Web standards; VS Code webview accessibility guidelines.
 
 ## v0.3 Export
 
-18) Export: LaTeX document
+25) Export: LaTeX document
 - Outcome: Command to export: equations rendered via Compute Engine, charts to SVG, injected into template.
 - Interfaces: Compute Engine API (MathJSON→LaTeX), `vega-embed` `toImageURL`, Node fs; template variables contract.
 
-19) Export: HTML document
+26) Export: HTML document
 - Outcome: Command to export a standalone HTML with MathJax and Vega runtime.
 - Interfaces: MathJax script, Vega runtime bundles, asset inlining strategy.
 
-20) Export configuration surface
+27) Export configuration surface
 - Outcome: Per-target settings (`exports.latex`, `exports.html`) read from YAML; override via command options.
 - Interfaces: Settings contract as in README; quick-pick for presets.
 
 ## v1.0 Polishing
 
-21) Snippets and quick insertions
+28) Snippets and quick insertions
 - Outcome: Snippets for `!equation` and `!chart`; command-driven inserts with minimal forms.
 - Interfaces: `contributes.snippets`, quick input UI.
 
-22) Hover previews in YAML editor
+29) Hover previews in YAML editor
 - Outcome: Hover over equation/chart nodes shows rendered preview.
 - Interfaces: `languages.registerHoverProvider`, lightweight renderer shared with webview.
 
-23) Validation and round-trip test suite
+30) Validation and round-trip test suite
 - Outcome: Automated tests for schema conformance and MathJSON⇄LaTeX stability at export-time.
 - Interfaces: Test runner (e.g., Mocha); golden files; Compute Engine.
 
-24) Evaluate panel (optional)
+31) Evaluate panel (optional)
 - Outcome: Panel to numerically/symbolically evaluate selected equation(s).
 - Interfaces: Compute Engine; message bus shared with editor.
 
