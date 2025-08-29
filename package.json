@@ -23,6 +23,19 @@
   "workspaceContains:**/*.r.yml"
   ],
   "contributes": {
+    "configuration": [
+      {
+        "title": "RichYAML",
+        "properties": {
+          "richyaml.preview.mode": {
+            "type": "string",
+            "default": "inline",
+            "enum": ["inline", "custom"],
+            "markdownDescription": "Choose how RichYAML previews show by default: inline in the YAML editor using insets, or via the Custom Editor."
+          }
+        }
+      }
+    ],
     "languages": [
       {
         "id": "richyaml",
@@ -55,6 +68,14 @@
       {
         "command": "richyaml.hello",
         "title": "RichYAML: Hello"
+      },
+      {
+        "command": "richyaml.toggleInlinePreviews",
+        "title": "RichYAML: Toggle Inline Previews"
+      },
+      {
+        "command": "richyaml.openCustomPreview",
+        "title": "RichYAML: Open Custom Preview"
       }
     ]
   },

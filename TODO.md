@@ -40,9 +40,11 @@ Scope: management-level tasks sized to ~0.5–2 days each. Developer subtasks im
 
 These items ensure equations, charts, and future rich types render inline in the regular YAML text editor, not only in a side webview/custom editor. The custom editor remains optional for a larger preview but the default experience is the normal YAML editor with inline previews.
 
-9) Default to inline-in-editor mode
+9) Default to inline-in-editor mode [DONE]
 - Outcome: Keep the standard YAML editor and render rich blocks inline using editor insets; make the custom editor an optional command (not default). Provide a setting `richyaml.preview.mode` = `inline` | `custom` (default: `inline`).
 - Interfaces: VS Code configuration (`contributes.configuration`), commands (`contributes.commands`), (proposed/stable) API for editor webview insets or a decoration-based fallback; `registerCustomTextEditorProvider` priority set to `option`.
+	- Implemented: `richyaml.preview.mode` setting with default `inline`; commands `RichYAML: Toggle Inline Previews` and `RichYAML: Open Custom Preview`.
+	- Inline previews: MVP placeholder using `createWebviewTextEditorInset` when available, with decoration fallback. Will be refined in Task 10 with precise YAML AST→range mapping.
 
 10) YAML AST → text range mapping
 - Outcome: Reliable mapping from parsed YAML nodes (e.g., `!equation`, `!chart`) to exact document ranges/lines to anchor inline previews and apply edits precisely.
@@ -162,3 +164,4 @@ These items ensure equations, charts, and future rich types render inline in the
  - 2025-08-28: Completed MVP Task 5. Implemented YAML parse/serialize service using `yaml`; host now posts `document:update` with parsed tree (tags preserved). Webview shows YAML text, parse errors, and a structured preview.
  - 2025-08-28: Completed MVP Task 6. Webview scans parsed tree for `!equation` nodes and renders them as read-only MathLive fields with description headers; added fallback pretty-print for MathJSON when LaTeX absent; updated CSP and styles; README bumped to v0.1.6.
  - 2025-08-29: Completed MVP Task 8. Added `schemas/richyaml.schema.json` (draft-07) and registered it via `contributes.yamlValidation` for `*.r.yaml`/`*.r.yml`. README bumped to v0.1.8 and version extracted into `src/version.ts` at build.
+ - 2025-08-29: Completed MVP Task 9. Added inline preview mode default (`richyaml.preview.mode`), toggle/open commands, and an MVP inline inset/decoration renderer. README bumped to v0.1.9.
