@@ -67,14 +67,106 @@
     const tid = setTimeout(() => done(new Error('vega timeout')), 8000);
   }
 
-  function renderChart(root, chart) {
+  function renderChart(root, chart, path) {
     root.innerHTML = '';
     const title = h('div', { className: 'ry-title', text: chart.title || 'Chart' });
     const body = h('div', { className: 'ry-body' });
+    // -- Minimal controls --
+    const controls = h('div', { className: 'ry-controls' });
+    const row = (label, control) => {
+      const wrap = h('div', { className: 'ry-row' });
+      wrap.appendChild(h('label', { className: 'ry-lbl', text: label }));
+      wrap.appendChild(control);
+      return wrap;
+    };
+    const input = (val, placeholder) => {
+      const el = h('input', { type: 'text' });
+      el.value = val != null ? String(val) : '';
+      if (placeholder) el.placeholder = placeholder;
+      return el;
+    };
+    const select = (opts, val) => {
+      const el = h('select');
+      for (const o of opts) {
+        const opt = h('option', { value: o, text: o });
+        if (String(val) === o) opt.selected = true;
+        el.appendChild(opt);
+      }
+      return el;
+    };
+    const markSel = select(['line', 'bar', 'point'], chart.mark || 'line');
+    const titleInp = input(chart.title, 'Title');
+    const xFieldInp = input(chart?.encoding?.x?.field || '', 'x field');
+    const xTypeSel = select(['quantitative', 'nominal', 'temporal', 'ordinal'], (chart?.encoding?.x?.type || 'quantitative'));
+    const yFieldInp = input(chart?.encoding?.y?.field || '', 'y field');
+    const yTypeSel = select(['quantitative', 'nominal', 'temporal', 'ordinal'], (chart?.encoding?.y?.type || 'quantitative'));
+    controls.appendChild(row('Title', titleInp));
+    controls.appendChild(row('Mark', markSel));
+    controls.appendChild(row('X Field', xFieldInp));
+    controls.appendChild(row('X Type', xTypeSel));
+    controls.appendChild(row('Y Field', yFieldInp));
+    controls.appendChild(row('Y Type', yTypeSel));
+    const hint = h('div', { className: 'ry-hint' });
+    controls.appendChild(hint);
     const target = h('div', { className: 'ry-chart' });
     body.appendChild(target);
+    body.appendChild(controls);
     root.appendChild(title);
     root.appendChild(body);
+
+    // Validation helpers
+    const allowedMarks = new Set(['line', 'bar', 'point']);
+    const allowedTypes = new Set(['quantitative', 'nominal', 'temporal', 'ordinal']);
+    const showError = (msg) => { hint.textContent = msg || ''; hint.style.color = msg ? 'var(--vscode-errorForeground, red)' : ''; };
+    const sendEdit = (propPath, value) => {
+      if (!vscode) return;
+      vscode.postMessage({ type: 'edit:apply', path, propPath, edit: 'set', value });
+    };
+    const onTitleChange = () => {
+      const v = titleInp.value.trim();
+      if (!v) { showError('Title required'); return; }
+      showError('');
+      sendEdit(['title'], v);
+    };
+    const onMarkChange = () => {
+      const v = String(markSel.value || '').toLowerCase();
+      if (!allowedMarks.has(v)) { showError('Invalid mark'); return; }
+      showError('');
+      sendEdit(['mark'], v);
+    };
+    const onXFieldChange = () => {
+      const v = xFieldInp.value.trim();
+      if (!v) { showError('x.field required'); return; }
+      showError('');
+      sendEdit(['encoding', 'x', 'field'], v);
+    };
+    const onXTypeChange = () => {
+      const v = String(xTypeSel.value || '').toLowerCase();
+      if (!allowedTypes.has(v)) { showError('Invalid x.type'); return; }
+      showError('');
+      sendEdit(['encoding', 'x', 'type'], v);
+    };
+    const onYFieldChange = () => {
+      const v = yFieldInp.value.trim();
+      if (!v) { showError('y.field required'); return; }
+      showError('');
+      sendEdit(['encoding', 'y', 'field'], v);
+    };
+    const onYTypeChange = () => {
+      const v = String(yTypeSel.value || '').toLowerCase();
+      if (!allowedTypes.has(v)) { showError('Invalid y.type'); return; }
+      showError('');
+      sendEdit(['encoding', 'y', 'type'], v);
+    };
+    titleInp.addEventListener('change', onTitleChange);
+    titleInp.addEventListener('blur', onTitleChange);
+    markSel.addEventListener('change', onMarkChange);
+    xFieldInp.addEventListener('change', onXFieldChange);
+    xFieldInp.addEventListener('blur', onXFieldChange);
+    xTypeSel.addEventListener('change', onXTypeChange);
+    yFieldInp.addEventListener('change', onYFieldChange);
+    yFieldInp.addEventListener('blur', onYFieldChange);
+    yTypeSel.addEventListener('change', onYTypeChange);
 
     ensureVega((err) => {
       if (err) {
@@ -131,7 +223,7 @@
     const root = document.getElementById('root');
     if (!root) return;
     if (msg.nodeType === 'equation') renderEquation(root, msg.data, msg.path);
-    else if (msg.nodeType === 'chart') renderChart(root, msg.data);
+    else if (msg.nodeType === 'chart') renderChart(root, msg.data, msg.path);
   }
 
   window.addEventListener('message', onMessage);

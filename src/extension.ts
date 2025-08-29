@@ -26,6 +26,16 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
   context.subscriptions.push(
+    vscode.commands.registerCommand('richyaml.showInlinePreviews', () => {
+      inlineController.setEnabledForActiveEditor(true);
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('richyaml.hideInlinePreviews', () => {
+      inlineController.setEnabledForActiveEditor(false);
+    })
+  );
+  context.subscriptions.push(
     vscode.commands.registerCommand('richyaml.openCustomPreview', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;
@@ -237,6 +247,7 @@ function getNonce() {
     decorationType?: vscode.TextEditorDecorationType;
     debounce?: NodeJS.Timeout;
     lastTextVersion?: number;
+  statusBar?: vscode.StatusBarItem;
   }>();
 
   private richTagRegex = /!(equation|chart)\b/;
@@ -251,6 +262,11 @@ function getNonce() {
     );
     this.disposables.push(
       vscode.workspace.onDidOpenTextDocument((doc) => this.onDocChanged(doc))
+    );
+    this.disposables.push(
+      vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
+        if (e.textEditor === vscode.window.activeTextEditor) this.onVisibleRangeChanged(e.textEditor);
+      })
     );
   }
 
@@ -284,6 +300,13 @@ function getNonce() {
     else this.enableForEditor(ed);
   }
 
+  setEnabledForActiveEditor(enabled: boolean) {
+    const ed = vscode.window.activeTextEditor;
+    if (!ed) return;
+    if (enabled) this.enableForEditor(ed);
+    else this.disableForEditor(ed);
+  }
+
   onActiveEditorChanged() {
     const ed = vscode.window.activeTextEditor;
     if (!ed) return;
@@ -304,10 +327,10 @@ function getNonce() {
     const key = doc.uri.toString();
     const st = this.perDocState.get(key);
     if (st?.enabled) {
-      if (st.debounce) clearTimeout(st.debounce);
-      st.debounce = setTimeout(() => {
-        this.renderForEditor(ed);
-      }, 120);
+  const cfg = vscode.workspace.getConfiguration('richyaml');
+  const delay = Math.max(0, Number(cfg.get('preview.inline.debounceMs', 150)) || 0);
+  if (st.debounce) clearTimeout(st.debounce);
+  st.debounce = setTimeout(() => this.renderForEditor(ed), delay);
     }
   }
 
@@ -315,14 +338,26 @@ function getNonce() {
     const key = editor.document.uri.toString();
     // Clear any existing then mark enabled
     this.cleanupForKey(key);
-    this.perDocState.set(key, { enabled: true, insets: [] });
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
+  status.name = 'RichYAML Previews';
+  status.text = '$(preview) Inline Previews: On';
+  status.tooltip = 'Click to hide inline previews for this editor';
+  status.command = 'richyaml.hideInlinePreviews';
+  status.show();
+  this.perDocState.set(key, { enabled: true, insets: [], statusBar: status });
     this.renderForEditor(editor);
   }
 
   private disableForEditor(editor: vscode.TextEditor) {
     const key = editor.document.uri.toString();
     this.cleanupForKey(key);
-    this.perDocState.set(key, { enabled: false, insets: [] });
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
+  status.name = 'RichYAML Previews';
+  status.text = '$(preview) Inline Previews: Off';
+  status.tooltip = 'Click to show inline previews for this editor';
+  status.command = 'richyaml.showInlinePreviews';
+  status.show();
+  this.perDocState.set(key, { enabled: false, insets: [], statusBar: status });
     // Also clear decorations
     try {
       editor.setDecorations(this.getOrCreateDecorationType(key), []);
@@ -337,6 +372,10 @@ function getNonce() {
       if (st.decorationType) {
         st.decorationType.dispose();
         st.decorationType = undefined;
+      }
+      if (st.statusBar) {
+        try { st.statusBar.dispose(); } catch {}
+        st.statusBar = undefined;
       }
       if (st.debounce) {
         clearTimeout(st.debounce);
@@ -369,7 +408,18 @@ function getNonce() {
   const text = doc.getText();
   const nodes: RichNodeInfo[] = findRichNodes(text);
   const parsed = parseWithTags(text);
-    const linesWithTags: number[] = nodes
+    const cfg = vscode.workspace.getConfiguration('richyaml');
+    const maxInsets = Math.max(0, Number(cfg.get('preview.inline.maxInsets', 12)) || 0);
+    const bufferLines = Math.max(0, Number(cfg.get('preview.inline.offscreenBufferLines', 20)) || 0);
+    const maxPts = Math.max(0, Number(cfg.get('preview.inline.maxDataPoints', 1000)) || 0);
+
+    // Virtualize: only render nodes whose line is in or near visible range
+    const visible = editor.visibleRanges?.[0] || new vscode.Range(0,0,Math.min(100, doc.lineCount-1), 0);
+    const startLine = Math.max(0, visible.start.line - bufferLines);
+    const endLine = Math.min(doc.lineCount - 1, visible.end.line + bufferLines);
+    const nodesWithLine = nodes.map((n) => ({ n, line: doc.positionAt(n.range.start).line }));
+    const visibleNodes = nodesWithLine.filter(({ line }) => line >= startLine && line <= endLine).slice(0, maxInsets).map(v => v.n);
+    const linesWithTags: number[] = visibleNodes
       .map((n) => doc.positionAt(n.range.start).line)
       .filter((ln, idx, arr) => arr.indexOf(ln) === idx)
       .sort((a, b) => a - b);
@@ -378,19 +428,20 @@ function getNonce() {
     const anyVscode: any = vscode as any;
     const canInset = typeof anyVscode.window?.createWebviewTextEditorInset === 'function';
     if (canInset && parsed.ok) {
-      for (const node of nodes) {
+      for (const node of visibleNodes) {
         const pos = doc.positionAt(node.range.start);
         const line = pos.line;
         const inset = anyVscode.window.createWebviewTextEditorInset(editor, line, 18, { enableScripts: true, localResourceRoots: [this.context.extensionUri] });
         inset.webview.html = this.buildInlineNodeHtml(inset.webview);
-        const data = this.resolveNodeData(parsed as any, node);
+        const dataRaw = this.resolveNodeData(parsed as any, node);
+        const data = this.applyDataGuards(dataRaw, maxPts);
         const nodeType = node.tag === '!equation' ? 'equation' : node.tag === '!chart' ? 'chart' : 'unknown';
         const msg = { type: 'preview:init', nodeType, data, path: node.path };
         inset.webview.postMessage(msg);
         // Listen for edits from the inset
-        const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
+    const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
           try {
-            if (m?.type === 'edit:apply' && Array.isArray(m?.path)) {
+      if (m?.type === 'edit:apply' && Array.isArray(m?.path)) {
               await this.applyInlineEdit(doc, m);
             }
           } catch (e) {
@@ -415,6 +466,17 @@ function getNonce() {
       editor.setDecorations(decoType, decos);
       st.decorationType = decoType;
     }
+  }
+
+  private onVisibleRangeChanged(editor: vscode.TextEditor) {
+    const key = editor.document.uri.toString();
+    const st = this.perDocState.get(key);
+    if (!st?.enabled) return;
+    // Re-render cheaply on scroll
+    const cfg = vscode.workspace.getConfiguration('richyaml');
+    const delay = Math.max(0, Number(cfg.get('preview.inline.debounceMs', 150)) || 0);
+    if (st.debounce) clearTimeout(st.debounce);
+    st.debounce = setTimeout(() => this.renderForEditor(editor), Math.min(50, delay));
   }
 
   private buildInlineNodeHtml(webview: vscode.Webview): string {
@@ -450,33 +512,129 @@ function getNonce() {
 </body></html>`;
   }
   private async applyInlineEdit(doc: vscode.TextDocument, msg: any) {
-    // Supported: update equation latex or mathjson at node path.
-    // Minimal MVP: write latex string when provided.
-    const path = msg.path as Array<string | number>;
+    // Supports:
+    // - Equation: { key: 'latex', value }
+    // - Chart: { propPath: ['encoding','x','field'], value }
+    const nodePath = msg.path as Array<string | number>;
+    const propPath: string[] | undefined = Array.isArray(msg.propPath) ? msg.propPath : undefined;
     const editKind = String(msg.edit || 'set');
     if (editKind !== 'set') return;
-    const key = typeof msg.key === 'string' ? msg.key : 'latex';
     const value = msg.value;
     const fullText = doc.getText();
-    const range = getPropertyValueRange(fullText, path, key);
-    const wsEdit = new vscode.WorkspaceEdit();
-    if (range) {
-      // Replace existing scalar value as a quoted YAML string
-      const start = doc.positionAt(range.start);
-      const end = doc.positionAt(range.end);
-      const yamlScalar = JSON.stringify(String(value));
-      wsEdit.replace(doc.uri, new vscode.Range(start, end), yamlScalar);
-    } else {
-      // Property missing: insert a new line under the map at path.end line
-      // Heuristic: insert after node start line with two spaces indentation
-      const nodes = findRichNodes(fullText);
-      const node = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(path));
-      const insertPos = node ? doc.positionAt(node.range.start) : new vscode.Position(0, 0);
-      const indent = '  ';
-      const yamlScalar = JSON.stringify(String(value));
-      const insertText = `\n${indent}${key}: ${yamlScalar}`;
-      wsEdit.insert(doc.uri, insertPos.translate(1, 0), insertText);
+
+    // Simple schema-ish validation for chart edits
+    if (propPath && propPath.length) {
+      const top = propPath[0];
+      if (top === 'mark') {
+        const allowed = new Set(['line','bar','point']);
+        if (!allowed.has(String(value).toLowerCase())) return; // ignore invalid
+      }
+      if ((top === 'encoding') && propPath.length >= 3 && (propPath[2] === 'type')) {
+        const allowedTypes = new Set(['quantitative','nominal','temporal','ordinal']);
+        if (!allowedTypes.has(String(value).toLowerCase())) return;
+      }
     }
+
+    const wsEdit = new vscode.WorkspaceEdit();
+
+    if (!propPath || propPath.length === 0) {
+      // Back-compat: single key under node (equation.latex)
+      const key = typeof msg.key === 'string' ? msg.key : 'latex';
+      const range = getPropertyValueRange(fullText, nodePath, key);
+      if (range) {
+        const start = doc.positionAt(range.start);
+        const end = doc.positionAt(range.end);
+        const yamlScalar = JSON.stringify(String(value));
+        wsEdit.replace(doc.uri, new vscode.Range(start, end), yamlScalar);
+      } else {
+        // Insert missing property as scalar under the node map
+        const nodes = findRichNodes(fullText);
+        const node = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(nodePath));
+        const insertPos = node ? doc.positionAt(node.range.start) : new vscode.Position(0, 0);
+        const indent = '  ';
+        const yamlScalar = JSON.stringify(String(value));
+        const insertText = `\n${indent}${key}: ${yamlScalar}`;
+        wsEdit.insert(doc.uri, insertPos.translate(1, 0), insertText);
+      }
+    } else {
+      // Nested path set under nodePath (only maps, no arrays for MVP)
+      // Try to find deepest existing property value range; otherwise insert new lines progressively.
+      const [topKey, ...rest] = propPath;
+      const topRange = getPropertyValueRange(fullText, nodePath, topKey);
+      if (!rest.length) {
+        // Simple property under node
+        if (topRange) {
+          const start = doc.positionAt(topRange.start);
+          const end = doc.positionAt(topRange.end);
+          const yamlScalar = JSON.stringify(String(value));
+          wsEdit.replace(doc.uri, new vscode.Range(start, end), yamlScalar);
+        } else {
+          // Insert new top-level property
+          const nodes = findRichNodes(fullText);
+          const node = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(nodePath));
+          const insertPos = node ? doc.positionAt(node.range.start) : new vscode.Position(0, 0);
+          const indent = '  ';
+          const yamlScalar = JSON.stringify(String(value));
+          const insertText = `\n${indent}${topKey}: ${yamlScalar}`;
+          wsEdit.insert(doc.uri, insertPos.translate(1, 0), insertText);
+        }
+      } else {
+        // Need to set a nested property (e.g., encoding.x.field)
+        // We'll insert minimal structure if missing.
+        const text = doc.getText();
+        const lines = text.split(/\r?\n/);
+        const nodes = findRichNodes(text);
+        const node = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(nodePath));
+        const anchorPos = node ? doc.positionAt(node.range.start) : new vscode.Position(0,0);
+        const anchorLine = anchorPos.line;
+        const indent = '  ';
+        // Build YAML snippet for missing path
+  const snippet = (keys: string[], finalValue: unknown) => {
+          let s = '';
+          for (let i = 0; i < keys.length - 1; i++) s += `\n${indent.repeat(i+1)}${keys[i]}:`;
+          const lastKey = keys[keys.length - 1];
+          const scalar = JSON.stringify(String(finalValue));
+          s += `\n${indent.repeat(keys.length)}${lastKey}: ${scalar}`;
+          return s;
+        };
+        // Find if topKey exists; if not, insert whole chain
+        if (!topRange) {
+          const insertText = snippet(propPath, value);
+          wsEdit.insert(doc.uri, anchorPos.translate(1, 0), insertText);
+        } else if (rest.length === 1) {
+          // editing e.g., encoding.title
+          const subKey = rest[0];
+          const subRange = getPropertyValueRange(fullText, nodePath.concat(topKey as any), subKey);
+          if (subRange) {
+            const start = doc.positionAt(subRange.start);
+            const end = doc.positionAt(subRange.end);
+            wsEdit.replace(doc.uri, new vscode.Range(start, end), JSON.stringify(String(value)));
+          } else {
+            // Insert under existing topKey map
+            const topStart = doc.positionAt(topRange.start);
+            wsEdit.insert(doc.uri, topStart.translate(1, 0), `\n${indent}${subKey}: ${JSON.stringify(String(value))}`);
+          }
+        } else {
+          // encoding.x.field style nested
+          const pathToX = nodePath.concat(topKey as any);
+          const xExists = getPropertyValueRange(fullText, pathToX, rest[0]);
+          if (!xExists) {
+            const insertText = `\n${indent}${rest[0]}:\n${indent.repeat(2)}${rest[1]}: ${JSON.stringify(String(value))}`;
+            const topStart = doc.positionAt(topRange.start);
+            wsEdit.insert(doc.uri, topStart.translate(1, 0), insertText);
+          } else if (rest.length === 2) {
+            const fieldRange = getPropertyValueRange(fullText, pathToX.concat(rest[0] as any), rest[1]);
+            if (fieldRange) {
+              wsEdit.replace(doc.uri, new vscode.Range(doc.positionAt(fieldRange.start), doc.positionAt(fieldRange.end)), JSON.stringify(String(value)));
+            } else {
+              const xStart = doc.positionAt((xExists as any).start);
+              wsEdit.insert(doc.uri, xStart.translate(1, 0), `\n${indent}${rest[1]}: ${JSON.stringify(String(value))}`);
+            }
+          }
+        }
+      }
+    }
+
     await vscode.workspace.applyEdit(wsEdit);
   }
   private resolveNodeData(parsed: ReturnType<typeof parseWithTags>, node: RichNodeInfo): any | undefined {
@@ -507,6 +665,17 @@ function getNonce() {
       return { title, mark, data, encoding, legend, colors, vegaLite, width, height };
     }
     return undefined;
+  }
+
+  private applyDataGuards(data: any, maxPoints: number) {
+    if (!data) return data;
+    // Truncate chart inline values to maxPoints
+    if (data && data.data && Array.isArray(data.data.values)) {
+      if (data.data.values.length > maxPoints) {
+        data = { ...data, data: { ...data.data, values: data.data.values.slice(0, maxPoints) } };
+      }
+    }
+    return data;
   }
 
   private extractInlineNodeData(doc: vscode.TextDocument, node: RichNodeInfo): any {

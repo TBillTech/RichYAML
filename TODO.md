@@ -60,13 +60,14 @@ These items ensure equations, charts, and future rich types render inline in the
 - Outcome: Edits in MathLive inset update the underlying YAML (`latex`) with undo/redo via WorkspaceEdit; basic conflict handling (fallback insert when property missing).
 - Interfaces: `webview→host` `edit:apply` with `path/key/value`; `WorkspaceEdit` replacing value range via CST; minimal fallback insert.
 
-13) Minimal inline chart controls → YAML
+13) Minimal inline chart controls → YAML [DONE]
 - Outcome: Basic controls in the chart inset (title/mark/encodings dropdowns) that write back to YAML; validate against schema before applying.
 - Interfaces: Same messaging/edit pipeline; schema validation preflight; small UX with keyboard support.
 
-14) Visibility toggles and performance guardrails
+14) Visibility toggles and performance guardrails [DONE]
 - Outcome: Commands and per-editor toggle to show/hide inline previews; global setting limits (max insets, max dataset size); debounced updates; background disposal when offscreen.
 - Interfaces: `contributes.commands`, context keys, settings; measurement of render cost; lazy data hydration.
+	- Implemented: Settings `richyaml.preview.inline.maxInsets`, `richyaml.preview.inline.maxDataPoints`, `richyaml.preview.inline.debounceMs`, `richyaml.preview.inline.offscreenBufferLines`. Commands `Show Inline Previews` and `Hide Inline Previews` added. Status bar toggle reflects per-editor state. Virtualized rendering by visible range; chart data truncated to limit; debounced updates on edits/scroll.
 
 15) Inline insets security and accessibility
 - Outcome: Review CSP/URI allowlist for insets; ARIA roles and focus traversal between text and insets; document known limitations (diff editor, folding, screen readers).
@@ -188,3 +189,5 @@ S3) Side preview panel (auto-synced)
  - 2025-08-29: Completed MVP Task 10. Added AST→range mapping via `findRichNodes` using YAML CST; integrated into inline renderer for precise anchoring with debounce. README bumped to v0.1.10.
  - 2025-08-29: Completed MVP Task 11. Implemented inline renderer bundle and host wiring to feed actual node data to insets; strict CSP and lifecycle mgmt. Ready for two-way editing in Task 12.
  - 2025-08-29: Completed MVP Task 12. Enabled editable MathLive insets for equations and applied `latex` updates back to YAML via precise range replace or insert; README bumped to v0.1.12.
+ - 2025-08-29: Completed MVP Task 13. Added minimal inline chart controls (title, mark, x/y field+type) that write back to YAML with basic validation; README bumped to v0.1.13.
+ - 2025-08-29: Completed MVP Task 14. Visibility toggles (show/hide + status bar), performance guardrails (maxInsets, maxDataPoints, debounce, offscreen buffer), and virtualization of inline insets; README bumped to v0.1.14.

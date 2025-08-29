@@ -1,4 +1,4 @@
-# RichYAML v0.1.12
+# RichYAML v0.1.14
 VSCode Extension to view/edit YAML with in place rendering of formulas and charts (and more)
 
 YAML as a single, portable “source of truth” with equations stored as MathJSON and declarative charts.
@@ -9,7 +9,7 @@ RichYAML’s core requirement is that equations, charts, and other rich displays
 
 - Design default: Inline. The custom editor with a big preview remains optional. While this capability is being rolled out, you can switch modes as needed.
 - Two-way edits: Editing a mathfield updates `mathjson` (and optionally `latex`); basic chart controls update the `encoding`/`title`.
-  - Now implemented for equations (latex field) inline; charts remain read-only for now.
+  - Implemented inline: equations (latex) and minimal chart controls (title, mark, x/y field+type) writing back to YAML with simple validation.
 - Precise mapping: Insets are anchored to the exact node range in the file. If surrounding text changes while you’re editing, RichYAML retries or shows a small conflict banner.
 - Toggle visibility: You can show/hide all inline previews per editor if you just want plain text temporarily.
 
@@ -17,6 +17,13 @@ Settings and commands (planned/rolling out):
 - `richyaml.preview.mode`: `inline` (default) | `custom` — choose inline insets in the YAML editor, or open the Custom Editor as the default.
 - `RichYAML: Toggle Inline Previews` — per-editor on/off.
 - `RichYAML: Open Custom Preview` — open the side-by-side/custom view when you need a larger canvas.
+ - `RichYAML: Show Inline Previews` / `RichYAML: Hide Inline Previews` — explicit controls for visibility.
+
+Performance guardrails (configurable):
+- `richyaml.preview.inline.maxInsets` (default 12) — cap how many insets render at once.
+- `richyaml.preview.inline.offscreenBufferLines` (default 20) — render only near the viewport.
+- `richyaml.preview.inline.maxDataPoints` (default 1000) — truncate inline chart datasets.
+- `richyaml.preview.inline.debounceMs` (default 150ms) — delay updates while typing/scrolling.
 
 Limitations and caveats:
 - Diff editors and read-only editors may not display interactive insets; RichYAML falls back to static thumbnails or a note.

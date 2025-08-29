@@ -32,6 +32,30 @@
             "default": "inline",
             "enum": ["inline", "custom"],
             "markdownDescription": "Choose how RichYAML previews show by default: inline in the YAML editor using insets, or via the Custom Editor."
+          },
+          "richyaml.preview.inline.maxInsets": {
+            "type": "number",
+            "default": 12,
+            "minimum": 0,
+            "markdownDescription": "Maximum number of inline preview insets to render at once (performance guardrail)."
+          },
+          "richyaml.preview.inline.maxDataPoints": {
+            "type": "number",
+            "default": 1000,
+            "minimum": 0,
+            "markdownDescription": "Maximum number of data points to send to chart previews. Extra points are truncated."
+          },
+          "richyaml.preview.inline.debounceMs": {
+            "type": "number",
+            "default": 150,
+            "minimum": 0,
+            "markdownDescription": "Debounce time in milliseconds for updating inline previews on edits."
+          },
+          "richyaml.preview.inline.offscreenBufferLines": {
+            "type": "number",
+            "default": 20,
+            "minimum": 0,
+            "markdownDescription": "Number of extra lines above/below the visible editor range to keep inline previews rendered."
           }
         }
       }
@@ -72,6 +96,14 @@
       {
         "command": "richyaml.toggleInlinePreviews",
         "title": "RichYAML: Toggle Inline Previews"
+      },
+      {
+        "command": "richyaml.showInlinePreviews",
+        "title": "RichYAML: Show Inline Previews"
+      },
+      {
+        "command": "richyaml.hideInlinePreviews",
+        "title": "RichYAML: Hide Inline Previews"
       },
       {
         "command": "richyaml.openCustomPreview",
