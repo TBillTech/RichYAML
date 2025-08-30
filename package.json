@@ -30,10 +30,23 @@
       {
         "title": "RichYAML",
         "properties": {
+          "richyaml.security.allowNetworkResources": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Allow webviews to load external https resources (MathLive/Vega CDNs). When false (default), only bundled extension assets are used and network loading is disabled."
+          },
+          "richyaml.security.allowDataOutsideWorkspace": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Allow charts to read data files outside the current workspace folder. When false (default), data.file must resolve within the workspace."
+          },
           "richyaml.preview.mode": {
             "type": "string",
             "default": "inline",
-            "enum": ["inline", "custom"],
+            "enum": [
+              "inline",
+              "custom"
+            ],
             "markdownDescription": "Choose how RichYAML previews show by default: inline in the YAML editor using insets, or via the Custom Editor."
           },
           "richyaml.preview.inline.experimentalInsets": {
@@ -71,8 +84,13 @@
     "languages": [
       {
         "id": "richyaml",
-        "aliases": ["RichYAML", "richyaml"],
-        "mimetypes": ["text/x-richyaml"],
+        "aliases": [
+          "RichYAML",
+          "richyaml"
+        ],
+        "mimetypes": [
+          "text/x-richyaml"
+        ],
         "filenamePatterns": [
           "*.r.yaml",
           "*.r.yml"
@@ -81,7 +99,10 @@
     ],
     "yamlValidation": [
       {
-        "fileMatch": ["*.r.yaml", "*.r.yml"],
+        "fileMatch": [
+          "*.r.yaml",
+          "*.r.yml"
+        ],
         "url": "./schemas/richyaml.schema.json"
       }
     ],
@@ -90,8 +111,12 @@
         "viewType": "richyaml.editor",
         "displayName": "RichYAML Preview",
         "selector": [
-          { "filenamePattern": "*.r.yaml" },
-          { "filenamePattern": "*.r.yml" }
+          {
+            "filenamePattern": "*.r.yaml"
+          },
+          {
+            "filenamePattern": "*.r.yml"
+          }
         ],
         "priority": "option"
       }
@@ -121,23 +146,24 @@
   },
   "scripts": {
   "prebuild": "node scripts/extract-version.js && node scripts/bundle-vega.js",
-  "build": "tsc -p ./",
-  "watch": "npm run prebuild && tsc -watch -p ./",
+  "build": "node ./node_modules/typescript/bin/tsc -p ./",
+  "watch": "npm run prebuild && node ./node_modules/typescript/bin/tsc -watch -p ./",
     "lint": "echo 'No linter configured'",
-  "prepare": "node scripts/extract-version.js",
-  "vscode:prepublish": "npm run prebuild && npm run build",
+    "prepare": "node scripts/extract-version.js",
+    "vscode:prepublish": "npm run prebuild && npm run build",
     "package": "vsce package --no-dependencies",
-  "ci": "npm ci && npm run prebuild && npm run build && npx vsce package --no-dependencies"
+    "ci": "npm ci && npm run prebuild && npm run build && npx vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
     "@types/vscode": "^1.90.0",
     "@types/yaml": "^1.9.7",
     "esbuild": "^0.21.5",
-    "typescript": "^5.4.5",
+    "typescript": "^5.5.4",
     "vsce": "^2.15.0"
   },
   "dependencies": {
+    "mathlive": "^0.107.0",
     "vega": "^6.0.0",
     "vega-interpreter": "^2.0.0",
     "yaml": "^2.4.5"

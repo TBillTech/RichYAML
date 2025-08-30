@@ -1,5 +1,9 @@
-// Bundles Vega and vega-interpreter into IIFE globals for CSP-safe webview use.
-// Outputs: media/vendor/vega.min.js and media/vendor/vega-interpreter.min.js
+// Bundles Vega and vega-interpreter into IIFE globals and copies MathLive assets.
+// Outputs:
+//  - media/vendor/vega.min.js
+//  - media/vendor/vega-interpreter.min.js
+//  - media/vendor/mathlive.min.js
+//  - media/vendor/mathlive-static.css
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
@@ -41,6 +45,34 @@ async function bundleAll() {
   });
 
   console.log('[bundle-vega] Bundled Vega and vega-interpreter to media/vendor');
+
+  // Copy MathLive assets (JS + CSS) from node_modules to vendor
+  try {
+    const nm = path.join(__dirname, '..', 'node_modules', 'mathlive');
+    const outDir = path.join(__dirname, '..', 'media', 'vendor');
+    const srcJs = path.join(nm, 'mathlive.min.js');
+    const srcCss = path.join(nm, 'mathlive-static.css');
+    const srcFontsCss = path.join(nm, 'mathlive-fonts.css');
+    const dstJs = path.join(outDir, 'mathlive.min.js');
+    const dstCss = path.join(outDir, 'mathlive-static.css');
+    const dstFontsCss = path.join(outDir, 'mathlive-fonts.css');
+    await fs.promises.copyFile(srcJs, dstJs);
+    await fs.promises.copyFile(srcCss, dstCss);
+    // fonts CSS and font files
+    await fs.promises.copyFile(srcFontsCss, dstFontsCss).catch(() => {});
+    const srcFontsDir = path.join(nm, 'fonts');
+    const dstFontsDir = path.join(outDir, 'fonts');
+    await ensureDir(dstFontsDir);
+    try {
+      const fontFiles = await fs.promises.readdir(srcFontsDir);
+      for (const f of fontFiles) {
+        await fs.promises.copyFile(path.join(srcFontsDir, f), path.join(dstFontsDir, f));
+      }
+    } catch {}
+    console.log('[bundle-vega] Copied MathLive assets to media/vendor');
+  } catch (err) {
+    console.warn('[bundle-vega] MathLive not found; skipping copy', err?.message || err);
+  }
 }
 
 bundleAll().catch((err) => {

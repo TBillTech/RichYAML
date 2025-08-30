@@ -117,11 +117,12 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     webviewPanel: vscode.WebviewPanel
   ): void | Thenable<void> {
     const { webview } = webviewPanel;
+  const cfg = vscode.workspace.getConfiguration('richyaml');
+  const allowNet = !!cfg.get('security.allowNetworkResources', false);
     webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        this.context.extensionUri,
-        vscode.Uri.joinPath(this.context.extensionUri, 'media')
+    vscode.Uri.joinPath(this.context.extensionUri, 'media')
       ]
     };
 
@@ -148,7 +149,7 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
 
   const panelTitle = `RichYAML Preview ${RICHYAML_VERSION} (MVP Placeholder)`;
   webviewPanel.title = panelTitle;
-  webview.html = this.getHtml(webview, RICHYAML_VERSION);
+  webview.html = this.getHtml(webview, RICHYAML_VERSION, allowNet);
 
   const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() === document.uri.toString()) {
@@ -183,9 +184,9 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
   updateWebview();
   }
 
-  private getHtml(webview: vscode.Webview, versionLabel: string): string {
+  private getHtml(webview: vscode.Webview, versionLabel: string, allowNet: boolean): string {
     const nonce = getNonce();
-    const scriptUri = webview.asWebviewUri(
+  const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'main.js')
     );
     const vegaShimUri = webview.asWebviewUri(
@@ -205,16 +206,29 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     const styleUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'styles.css')
     );
+    const mathliveJsLocal = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive.min.js')
+    );
+    const mathliveCssLocal = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-static.css')
+    );
+    const mathliveFontsCssLocal = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-fonts.css')
+    );
 
-    const csp = [
+  const csp = [
       `default-src 'none'`,
-      `img-src ${webview.cspSource} https: data:`,
-      // Allow https for MathLive CSS
-      `style-src ${webview.cspSource} https: 'unsafe-inline'`,
-      // Allow fonts from extension and https (MathLive)
-      `font-src ${webview.cspSource} https:`,
-      // Allow our nonce'd script and https (MathLive runtime)
-      `script-src ${webview.cspSource} 'nonce-${nonce}' https:`
+      `img-src ${webview.cspSource} ${allowNet ? 'https:' : ''} data:`,
+      `style-src ${webview.cspSource} ${allowNet ? 'https:' : ''} 'unsafe-inline'`,
+      `font-src ${webview.cspSource} ${allowNet ? 'https:' : ''}`,
+      `script-src ${webview.cspSource} 'nonce-${nonce}' ${allowNet ? 'https:' : ''}`,
+      `connect-src 'none'`,
+      `frame-src 'none'`,
+      `child-src 'none'`,
+      `media-src 'none'`,
+      `object-src 'none'`,
+      `base-uri 'none'`,
+      `form-action 'none'`
     ].join('; ');
 
     return /* html */ `<!DOCTYPE html>
@@ -225,8 +239,9 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RichYAML Preview ${versionLabel}</title>
   <link rel="stylesheet" href="${styleUri}">
-  <!-- MathLive CSS (read-only render); TODO: bundle locally in a future task -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive-static.css">
+  <!-- Local MathLive CSS + fonts -->
+  <link rel="stylesheet" href="${mathliveFontsCssLocal}">
+  <link rel="stylesheet" href="${mathliveCssLocal}">
 </head>
 <body>
   <div class="container">
@@ -237,10 +252,9 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
       <pre id="content">Loading…</pre>
     </details>
   </div>
-  <!-- MathLive runtime (read-only). Note: loaded from CDN for MVP; will be bundled later. -->
-  <script nonce="${nonce}" src="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.min.js"></script>
+  <script nonce="${nonce}" src="${mathliveJsLocal}"></script>
   <!-- Load Vega shim first to expose window.vega and expressionInterpreter under CSP -->
-  <script nonce="${nonce}" src="${vegaShimUri}"${vegaLocalUri ? ` data-vega="${vegaLocalUri}"` : ''}${interpLocalUri ? ` data-interpreter="${interpLocalUri}"` : ''}></script>
+  <script nonce="${nonce}" src="${vegaShimUri}"${vegaLocalUri ? ` data-vega="${vegaLocalUri}"` : ''}${interpLocalUri ? ` data-interpreter="${interpLocalUri}"` : ''}${!allowNet ? ' data-no-network="true"' : ''}></script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
@@ -565,6 +579,8 @@ function getNonce() {
 
   private buildInlineNodeHtml(webview: vscode.Webview): string {
     const nonce = getNonce();
+    const cfg = vscode.workspace.getConfiguration('richyaml');
+    const allowNet = !!cfg.get('security.allowNetworkResources', false);
     const style = [
       `:root{color-scheme:var(--vscode-colorScheme, light dark)}`,
   `body{margin:0;font:12px/1.35 var(--vscode-editor-font-family);color:var(--vscode-foreground);}`,
@@ -576,8 +592,9 @@ function getNonce() {
       `.ry-json{max-height:160px;overflow:auto;background:var(--vscode-editor-inactiveSelectionBackground);padding:6px;border-radius:4px}`,
       `.ry-chart{min-height:80px}`
     ].join('\n');
-    const mathliveCss = `https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive-static.css`;
-    const mathliveJs = `https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.min.js`;
+  const mathliveCss = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-static.css')).toString();
+  const mathliveFontsCss = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-fonts.css')).toString();
+  const mathliveJs = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive.min.js')).toString();
   const vegaShimUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vega-shim.js'));
   // Prefer local vendor bundles if available (built by prebuild script)
   const vegaLocalFs = path.join(this.context.extensionPath, 'media', 'vendor', 'vega.min.js');
@@ -590,13 +607,13 @@ function getNonce() {
     const csp = [
       `default-src 'none'`,
       // Images from extension, data URIs, and https (for potential font sprite assets)
-      `img-src ${webview.cspSource} https: data:`,
+      `img-src ${webview.cspSource} ${allowNet ? 'https:' : ''} data:`,
       // Inline <style> is used for tiny CSS; allow extension and https (MathLive CSS)
-      `style-src ${webview.cspSource} https: 'unsafe-inline'`,
+      `style-src ${webview.cspSource} ${allowNet ? 'https:' : ''} 'unsafe-inline'`,
       // Only fonts from extension or https
-      `font-src ${webview.cspSource} https:`,
+      `font-src ${webview.cspSource} ${allowNet ? 'https:' : ''}`,
       // Only scripts from extension with nonce, plus https (MathLive CDN). No eval.
-      `script-src ${webview.cspSource} 'nonce-${nonce}' https:`,
+      `script-src ${webview.cspSource} 'nonce-${nonce}' ${allowNet ? 'https:' : ''}`,
       // Disallow all connections and embeddings
       `connect-src 'none'`,
       `frame-src 'none'`,
@@ -610,12 +627,13 @@ function getNonce() {
     ].join('; ');
   return `<!DOCTYPE html><html><head>
 <meta http-equiv="Content-Security-Policy" content="${csp}">
+<link rel="stylesheet" href="${mathliveFontsCss}">
 <link rel="stylesheet" href="${mathliveCss}">
 <style>${style}</style>
 </head><body>
 <div id="root" role="group" aria-label="RichYAML inline preview" tabindex="0"></div>
 <script nonce="${nonce}" src="${mathliveJs}"></script>
-<script nonce="${nonce}" src="${vegaShimUri}"${vegaLocalUri ? ` data-vega="${vegaLocalUri}"` : ''}${interpLocalUri ? ` data-interpreter="${interpLocalUri}"` : ''}></script>
+<script nonce="${nonce}" src="${vegaShimUri}"${vegaLocalUri ? ` data-vega="${vegaLocalUri}"` : ''}${interpLocalUri ? ` data-interpreter="${interpLocalUri}"` : ''}${!allowNet ? ' data-no-network="true"' : ''}></script>
 <script nonce="${nonce}" src="${inlineJsUri}"></script>
 </body></html>`;
   }
@@ -826,13 +844,24 @@ function getNonce() {
 async function resolveDataFileRelative(docUri: vscode.Uri, filePath: string, maxPoints: number): Promise<any[]> {
   if (!filePath || typeof filePath !== 'string') throw new Error('Missing file');
   let p = filePath.trim();
+  if (/^https?:/i.test(p)) throw new Error('Network URLs are not allowed');
   if (p.startsWith('file:')) p = p.slice('file:'.length);
   // Normalize separators
   p = p.replace(/\\/g, '/');
   const isAbs = path.isAbsolute(p);
   const baseDir = path.dirname(docUri.fsPath);
   const targetFs = isAbs ? p : path.join(baseDir, p);
-  const target = vscode.Uri.file(targetFs);
+  const targetFsResolved = path.resolve(targetFs);
+  // Enforce workspace boundary unless opted out
+  const allowOutside = !!vscode.workspace.getConfiguration('richyaml').get('security.allowDataOutsideWorkspace', false);
+  const wsFolder = vscode.workspace.getWorkspaceFolder(docUri);
+  if (wsFolder && !allowOutside) {
+    const wsRoot = path.resolve(wsFolder.uri.fsPath) + path.sep;
+    if (!targetFsResolved.startsWith(wsRoot)) {
+      throw new Error('Data path must be inside the current workspace');
+    }
+  }
+  const target = vscode.Uri.file(targetFsResolved);
   let buf: Uint8Array;
   try {
     buf = await vscode.workspace.fs.readFile(target);

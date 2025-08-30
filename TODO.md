@@ -82,8 +82,8 @@ These items ensure equations, charts, and future rich types render inline in the
 - Outcome: On document change, update webview preview without losing scroll/selection.
 - Interfaces: `onDidChangeTextDocument`, debounced `preview:update` message.
 
-18) Security review and threat modeling (webview)
-- Outcome: Checklist and fixes for URI handling, sanitization, and isolation.
+18) Security review and threat modeling (webview) [DONE]
+- Outcome: Added security settings (`allowNetworkResources`, `allowDataOutsideWorkspace`), hardened CSPs to default block external resources, passed no-network flag to Vega shim, constrained `localResourceRoots`, and restricted `data.file` to workspace by default; blocked http(s) in data paths.
 - Interfaces: VS Code webview security guidance; CSP; URI allowlist.
 
 ### Stable Editor UX (ships without inline insets)
@@ -195,3 +195,4 @@ S3) Side preview panel (auto-synced)
  - 2025-08-29: Completed MVP Task 15. Tightened inline inset CSP/allowlist; added ARIA roles and focus traversal; documented limitations. README bumped to v0.1.15.
  - 2025-08-29: Completed MVP Task 16. Implemented workspace `data.file` resolver (CSV/JSON/YAML) with size cap and messaging for both Custom Preview and inline insets. README bumped to v0.1.16.
 - 2025-08-29: Completed MVP Task 17. Debounced custom preview updates and preserved webview scroll/focus across document changes; inline behavior unchanged. README bumped to v0.1.17.
+ - 2025-08-29: Completed MVP Task 18. Hardened security: CSP respects network toggle; Vega shim honors no-network; `data.file` is workspace-bound by default; new security settings added. README bumped to v0.1.18.

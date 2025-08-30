@@ -30,14 +30,15 @@ async function loadWithFallback(urls, nonce, label) {
 const currentScript = document.currentScript;
 const localVega = currentScript && currentScript.getAttribute('data-vega');
 const localInterp = currentScript && currentScript.getAttribute('data-interpreter');
-const VEGA_UMD = [
+const noNetwork = currentScript && currentScript.getAttribute('data-no-network');
+const VEGA_UMD = (noNetwork ? [localVega] : [
   localVega,
   'https://cdn.jsdelivr.net/npm/vega@6/build/vega.min.js',
   'https://cdn.jsdelivr.net/npm/vega@6/build/vega.js',
   'https://unpkg.com/vega@6/build/vega.min.js',
   'https://unpkg.com/vega@6/build/vega.js'
-].filter(Boolean);
-const INTERP_UMD = [
+]).filter(Boolean);
+const INTERP_UMD = (noNetwork ? [localInterp] : [
   localInterp,
   // Possible UMD locations for vega-interpreter v2
   'https://cdn.jsdelivr.net/npm/vega-interpreter@2/build/vega-interpreter.umd.js',
@@ -52,7 +53,7 @@ const INTERP_UMD = [
   'https://unpkg.com/vega-interpreter@2/dist/vega-interpreter.umd.min.js',
   'https://unpkg.com/vega-interpreter@2/build/vega-interpreter.min.js',
   'https://unpkg.com/vega-interpreter@2/build/vega-interpreter.js'
-].filter(Boolean);
+]).filter(Boolean);
 
 (async function init() {
   try {

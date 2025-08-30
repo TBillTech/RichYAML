@@ -19,63 +19,71 @@
 
   function renderEquation(root, data, path) {
     root.innerHTML = '';
-    // Keep the equation very compact: no title; just the math field
-    const body = h('div', { className: 'ry-body ry-body-eq', role: 'group', 'aria-label': 'Equation editor' });
-    const mf = document.createElement('math-field');
-    // Make editable for two-way MVP
-    mf.removeAttribute('readonly');
-    mf.setAttribute('virtual-keyboard-mode', 'manual');
-    mf.setAttribute('aria-label', 'Equation latex editor');
-    try { mf.value = data.latex ? String(data.latex) : '\\text{MathJSON}'; } catch {}
-    body.appendChild(mf);
-    if (!data.latex && data.mathjson) {
-      const pre = h('pre', { className: 'ry-json', role: 'region', 'aria-label': 'Equation MathJSON' }, JSON.stringify(data.mathjson, null, 2));
-      body.appendChild(pre);
-    }
-    root.appendChild(body);
-  // Debounced change -> host edit apply
-    let t;
+    const hasMath = !!customElements.get('math-field');
+    // Keep the equation very compact: no title; just the content
+    const body = h('div', { className: 'ry-body ry-body-eq', role: 'group', 'aria-label': hasMath ? 'Equation editor' : 'Equation preview' });
     let tsz;
-    const send = () => {
-      if (!vscode) return;
-      const payload = { type: 'edit:apply', path, key: 'latex', edit: 'set', value: mf.value || '' };
-      vscode.postMessage(payload);
-    };
     const postSizeSoon = () => {
       clearTimeout(tsz);
-    tsz = setTimeout(() => {
+      tsz = setTimeout(() => {
         try {
           const rect = root.getBoundingClientRect();
-      const desired = Math.ceil(rect.height);
-      if (vscode) vscode.postMessage({ type: 'size', heightPx: desired });
+          const desired = Math.ceil(rect.height);
+          if (vscode) vscode.postMessage({ type: 'size', heightPx: desired });
         } catch {}
       }, 16);
     };
-    const onInput = () => { clearTimeout(t); t = setTimeout(send, 200); postSizeSoon(); };
-    mf.addEventListener('input', onInput);
-    mf.addEventListener('keydown', (e) => {
-      // Accessibility: Esc or Ctrl+Enter returns focus to container/editor
-      if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
-        e.preventDefault();
-        try { (root.closest('[tabindex]') || root).focus(); } catch {}
-        if (vscode) vscode.postMessage({ type: 'focus:return' });
+    if (hasMath) {
+      const mf = document.createElement('math-field');
+      // Make editable for two-way MVP
+      mf.removeAttribute('readonly');
+      mf.setAttribute('virtual-keyboard-mode', 'manual');
+      mf.setAttribute('aria-label', 'Equation latex editor');
+      try { mf.value = data.latex ? String(data.latex) : '\\text{MathJSON}'; } catch {}
+      body.appendChild(mf);
+      if (!data.latex && data.mathjson) {
+        const pre = h('pre', { className: 'ry-json', role: 'region', 'aria-label': 'Equation MathJSON' }, JSON.stringify(data.mathjson, null, 2));
+        body.appendChild(pre);
       }
-    });
-    setTimeout(() => {
-      if (!customElements.get('math-field')) {
-        const warn = h('div', { className: 'ry-warn', text: 'Math renderer unavailable', role: 'alert' });
-        root.appendChild(warn);
-      }
-      // Measure and notify host to tighten inset height
-      postSizeSoon();
-      // Track subsequent size changes
-      try {
-        if ('ResizeObserver' in window) {
-          const ro = new ResizeObserver(() => postSizeSoon());
-          ro.observe(root);
+      root.appendChild(body);
+      // Debounced change -> host edit apply
+      let t;
+      const send = () => {
+        if (!vscode) return;
+        const payload = { type: 'edit:apply', path, key: 'latex', edit: 'set', value: mf.value || '' };
+        vscode.postMessage(payload);
+      };
+      const onInput = () => { clearTimeout(t); t = setTimeout(send, 200); postSizeSoon(); };
+      mf.addEventListener('input', onInput);
+      mf.addEventListener('keydown', (e) => {
+        // Accessibility: Esc or Ctrl+Enter returns focus to container/editor
+        if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
+          e.preventDefault();
+          try { (root.closest('[tabindex]') || root).focus(); } catch {}
+          if (vscode) vscode.postMessage({ type: 'focus:return' });
         }
-      } catch {}
-    }, 50);
+      });
+      setTimeout(() => {
+        postSizeSoon();
+        // Track subsequent size changes
+        try {
+          if ('ResizeObserver' in window) {
+            const ro = new ResizeObserver(() => postSizeSoon());
+            ro.observe(root);
+          }
+        } catch {}
+      }, 50);
+    } else {
+      // Fallback: render LaTeX/plain text without MathLive
+      const code = h('code', { className: 'ry-fallback' }, data.latex ? String(data.latex) : 'MathJSON');
+      body.appendChild(code);
+      if (!data.latex && data.mathjson) {
+        const pre = h('pre', { className: 'ry-json', role: 'region', 'aria-label': 'Equation MathJSON' }, JSON.stringify(data.mathjson, null, 2));
+        body.appendChild(pre);
+      }
+      root.appendChild(body);
+      setTimeout(() => postSizeSoon(), 20);
+    }
   }
 
   function ensureVega(cb) {

@@ -4,7 +4,7 @@ Use this document to guide your work in this repository. Keep your responses sho
 
 ## Next steps
 
-Focus: Work on MVP Task 18.
+Focus: Work on Stable Editor UX Task S0 (Rich hovers for equations/charts).
 
 Relevant `TODO.md` is in project base path
 Relevant `README.md` is in project base path

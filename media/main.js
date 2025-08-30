@@ -118,10 +118,12 @@
       card.appendChild(field);
       setTimeout(() => {
         if (!customElements.get('math-field')) {
-          const warn = document.createElement('div');
-          warn.className = 'eq-error';
-          warn.textContent = 'Math renderer unavailable (MathLive not loaded)';
-          card.appendChild(warn);
+          // Graceful fallback: show LaTeX/plain text instead of error
+          try { mf.remove(); } catch {}
+          const fallback = document.createElement('code');
+          fallback.className = 'eq-fallback';
+          fallback.textContent = eq.latex ? String(eq.latex) : 'MathJSON';
+          field.appendChild(fallback);
         }
       }, 200);
       list.appendChild(card);
