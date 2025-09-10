@@ -4,7 +4,7 @@ Use this document to guide your work in this repository. Keep your responses sho
 
 ## Next steps
 
-Focus: Work on Stable Editor UX Task S0 (Rich hovers for equations/charts).
+Focus: Work on Stable Editor UX Task S2 (CodeLens and gutter badges).
 
 Relevant `TODO.md` is in project base path
 Relevant `README.md` is in project base path

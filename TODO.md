@@ -88,13 +88,13 @@ These items ensure equations, charts, and future rich types render inline in the
 
 ### Stable Editor UX (ships without inline insets)
 
-S0) Rich hovers for equations/charts
+S0) Rich hovers for equations/charts [DONE]
 - Outcome: Hovering over a `!equation` or `!chart` node shows a rich preview (SVG/PNG) in a Markdown hover, including a short description/title when present. Fast, no webview required.
 - Interfaces: `languages.registerHoverProvider` for YAML/richyaml; render via lightweight renderer that outputs data URIs (MathLive → SVG/PNG snapshot; Vega → toImageURL) or cached assets; theme-aware background; small size budget.
 
-S1) Quick Fix / Code Action: “Edit equation/chart…”
-- Outcome: A code action on the node opens a compact webview editor (MathLive for equations, minimal chart controls) and applies a precise `WorkspaceEdit` back to YAML on save/apply with undo/redo. Handles minor conflicts (reparse+retry) and surfaces errors inline.
-- Interfaces: `languages.registerCodeActionsProvider` (kind: QuickFix/Refactor), `WebviewPanel` or `WebviewView` for the mini editor, `workspace.applyEdit`, YAML CST range mapping from Task 10, schema validation preflight.
+S1) Quick Fix / Code Action: “Edit equation/chart…” [DONE]
+- Outcome: Code action opens a compact webview editor (MathLive for equations; minimal chart controls) and applies `WorkspaceEdit` back to YAML with undo/redo. Minor conflicts handled via insert fallback; errors surfaced inline.
+- Interfaces: `languages.registerCodeActionsProvider` (QuickFix), `WebviewPanel` mini editor, `workspace.applyEdit`, CST range mapping from Task 10, basic schema validation preflight.
 
 S2) CodeLens and gutter badges
 - Outcome: Above each rich node, show CodeLens links: “Preview • Edit”. Optional gutter badges indicate rich content. Clicking Preview focuses/refreshes a pinned side preview for that node; Edit opens the mini editor (S1).
@@ -197,3 +197,4 @@ S3) Side preview panel (auto-synced)
 - 2025-08-29: Completed MVP Task 17. Debounced custom preview updates and preserved webview scroll/focus across document changes; inline behavior unchanged. README bumped to v0.1.17.
  - 2025-08-29: Completed MVP Task 18. Hardened security: CSP respects network toggle; Vega shim honors no-network; `data.file` is workspace-bound by default; new security settings added. README bumped to v0.1.18.
  - 2025-09-10: Updated default preview mode to `custom` (inline off by default). README updated to reflect the new default and how to enable inline insets; hover provider added for `!equation` and `!chart` with improved targeting.
+ - 2025-09-10: Completed Stable Editor UX Task S1. Added Quick Fix “Edit equation/chart…” and command `RichYAML: Edit Equation/Chart` that opens a compact mini editor using the inline renderer bundle; edits write back via precise ranges. README bumped to v0.1.19.

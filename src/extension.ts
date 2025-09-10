@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { registerRichYAMLHover } from './hover';
+import { registerRichYAMLCodeActions } from './codeActions';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as YAML from 'yaml';
@@ -109,6 +110,55 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register hover provider for YAML/richyaml
   try { registerRichYAMLHover(context); } catch {}
+
+  // Register code actions for S1 and the edit command
+  try { registerRichYAMLCodeActions(context); } catch {}
+  context.subscriptions.push(
+    vscode.commands.registerCommand('richyaml.editNodeAtCursor', async (uri?: vscode.Uri, pathSegs?: Array<string|number>, tag?: string) => {
+      const editor = vscode.window.activeTextEditor;
+      const doc = editor?.document ?? (uri ? await vscode.workspace.openTextDocument(uri) : undefined);
+      if (!doc) return;
+      const nodePath: Array<string|number> = Array.isArray(pathSegs) ? pathSegs : [];
+      const nodeType = tag === '!chart' ? 'chart' : 'equation';
+      const panel = vscode.window.createWebviewPanel(
+        'richyaml.miniEditor',
+        nodeType === 'equation' ? 'Edit Equation' : 'Edit Chart',
+        vscode.ViewColumn.Beside,
+        {
+          enableScripts: true,
+          localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')]
+        }
+      );
+      const allowNet = !!vscode.workspace.getConfiguration('richyaml').get('security.allowNetworkResources', false);
+  const inlineHtml = buildSingleNodeHtml(context, panel.webview, allowNet);
+      panel.webview.html = inlineHtml;
+      // Seed initial payload using existing parse + projection helpers
+      const text = doc.getText();
+      const nodes = findRichNodes(text);
+      const parsed = parseWithTags(text);
+      const target = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(nodePath)) ?? nodes[0];
+      if (target && parsed.ok) {
+        const data = getNodePayloadFromTree(parsed.tree as any, target);
+        const payload = { type: 'preview:init', nodeType: nodeType, data, path: target.path };
+        panel.webview.postMessage(payload);
+      }
+      // Handle edits and data requests similarly to inline insets
+      const controller = new InlinePreviewController(context);
+      const sub = panel.webview.onDidReceiveMessage(async (m) => {
+        if (m?.type === 'edit:apply') {
+          await (controller as any).applyInlineEdit(doc, m);
+        } else if (m?.type === 'data:request') {
+          try {
+            const values = await resolveDataFileRelative(doc.uri, String(m.file || ''), Number(vscode.workspace.getConfiguration('richyaml').get('preview.inline.maxDataPoints', 1000)) || 0);
+            panel.webview.postMessage({ type: 'data:resolved', path: m?.path, file: m?.file, values });
+          } catch (e: any) {
+            panel.webview.postMessage({ type: 'data:error', path: m?.path, file: m?.file, error: e?.message || String(e) });
+          }
+        }
+      });
+      panel.onDidDispose(() => { try { sub.dispose(); } catch {} try { controller.dispose(); } catch {} });
+    })
+  );
 }
 
 export function deactivate() {}
@@ -839,6 +889,64 @@ function getNonce() {
     const type = vscode.window.createTextEditorDecorationType({});
     return type;
   }
+}
+
+// Build a minimal HTML using the same inline renderer bundle for a single-node mini editor
+function buildSingleNodeHtml(context: vscode.ExtensionContext, webview: vscode.Webview, allowNet: boolean): string {
+  // Reuse InlinePreviewController.buildInlineNodeHtml to keep styles/assets consistent
+  const tmp = new (InlinePreviewController as any)(context);
+  try {
+    // Temporarily toggle the allowNet setting via parameter by reading inside method; we pass through CSP attributes accordingly
+    return (tmp as any).buildInlineNodeHtml(webview);
+  } catch {
+    // Fallback simple HTML
+    const nonce = getNonce();
+    const inlineJsUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'inline.js'));
+    const csp = [
+      `default-src 'none'`,
+      `img-src ${webview.cspSource} ${allowNet ? 'https:' : ''} data:`,
+      `style-src ${webview.cspSource} 'unsafe-inline'`,
+      `font-src ${webview.cspSource} ${allowNet ? 'https:' : ''}`,
+      `script-src ${webview.cspSource} 'nonce-${nonce}' ${allowNet ? 'https:' : ''}`,
+      `connect-src 'none'`,
+      `frame-src 'none'`,
+      `child-src 'none'`,
+      `media-src 'none'`,
+      `object-src 'none'`,
+      `base-uri 'none'`,
+      `form-action 'none'`
+    ].join('; ');
+    return `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"></head><body><div id="root"></div><script nonce="${nonce}" src="${inlineJsUri}"></script></body></html>`;
+  } finally {
+    try { tmp.dispose?.(); } catch {}
+  }
+}
+
+// Walk parsed tree (from parseWithTags) to get normalized node payload, similar to hover.ts
+function getNodePayloadFromTree(tree: any, node: RichNodeInfo): any | undefined {
+  let cur: any = tree;
+  for (const seg of node.path) {
+    if (cur == null) return undefined;
+    if (typeof seg === 'number') {
+      const arr = Array.isArray(cur) ? cur : Array.isArray(cur?.$items) ? cur.$items : undefined;
+      if (!arr || seg < 0 || seg >= arr.length) return undefined;
+      cur = arr[seg];
+    } else {
+      cur = cur?.[seg];
+    }
+  }
+  if (!cur || typeof cur !== 'object') return undefined;
+  const tag = String((cur as any).$tag || '');
+  if (tag !== node.tag) return undefined;
+  if (tag === '!equation') {
+    const { latex, mathjson, desc } = cur as any;
+    return { latex, mathjson, desc };
+  }
+  if (tag === '!chart') {
+    const { title, mark, data, encoding, legend, colors, vegaLite, width, height } = cur as any;
+    return { title, mark, data, encoding, legend, colors, vegaLite, width, height };
+  }
+  return undefined;
 }
 
 /**
