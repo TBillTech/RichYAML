@@ -196,3 +196,4 @@ S3) Side preview panel (auto-synced)
  - 2025-08-29: Completed MVP Task 16. Implemented workspace `data.file` resolver (CSV/JSON/YAML) with size cap and messaging for both Custom Preview and inline insets. README bumped to v0.1.16.
 - 2025-08-29: Completed MVP Task 17. Debounced custom preview updates and preserved webview scroll/focus across document changes; inline behavior unchanged. README bumped to v0.1.17.
  - 2025-08-29: Completed MVP Task 18. Hardened security: CSP respects network toggle; Vega shim honors no-network; `data.file` is workspace-bound by default; new security settings added. README bumped to v0.1.18.
+ - 2025-09-10: Updated default preview mode to `custom` (inline off by default). README updated to reflect the new default and how to enable inline insets; hover provider added for `!equation` and `!chart` with improved targeting.

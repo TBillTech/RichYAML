@@ -42,7 +42,7 @@
           },
           "richyaml.preview.mode": {
             "type": "string",
-            "default": "inline",
+            "default": "custom",
             "enum": [
               "inline",
               "custom"

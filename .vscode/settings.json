@@ -1,0 +1,7 @@
+{
+    "python-envs.pythonProjects": [],
+    // Use the workspace's existing Python env
+    "python.defaultInterpreterPath": "/home/tom/code/RichYAML/sandbox/bin/python",
+    // Ensure new integrated terminals auto-activate the selected env
+    "python.terminal.activateEnvironment": true
+}

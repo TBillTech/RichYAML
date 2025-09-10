@@ -5,16 +5,16 @@ YAML as a single, portable “source of truth” with equations stored as MathJS
 
 ## Inline previews in the regular YAML editor
 
-RichYAML’s core requirement is that equations, charts, and other rich displays render inline alongside your YAML text. You keep using the normal YAML editor; RichYAML adds inline “insets” where `!equation` and `!chart` nodes appear. Edits you make in those insets write back to the YAML so the file remains the single source of truth.
+RichYAML’s core requirement is that equations, charts, and other rich displays render inline alongside your YAML text. You keep using the normal YAML editor; RichYAML can add inline “insets” where `!equation` and `!chart` nodes appear. Edits you make in those insets write back to the YAML so the file remains the single source of truth.
 
-- Design default: Inline. The custom editor with a big preview remains optional. While this capability is being rolled out, you can switch modes as needed.
+- Design default: Custom Preview. Inline insets are optional and can be enabled per editor or via a setting. This keeps the default experience stable while inline matures.
 - Two-way edits: Editing a mathfield updates `mathjson` (and optionally `latex`); basic chart controls update the `encoding`/`title`.
   - Implemented inline: equations (latex) and minimal chart controls (title, mark, x/y field+type) writing back to YAML with simple validation.
 - Precise mapping: Insets are anchored to the exact node range in the file. If surrounding text changes while you’re editing, RichYAML retries or shows a small conflict banner.
 - Toggle visibility: You can show/hide all inline previews per editor if you just want plain text temporarily.
 
 Settings and commands (planned/rolling out):
-- `richyaml.preview.mode`: `inline` (default) | `custom` — choose inline insets in the YAML editor, or open the Custom Editor as the default.
+- `richyaml.preview.mode`: `custom` (default) | `inline` — choose the default behavior: open the Custom Preview or render inline insets in the YAML editor.
 - `RichYAML: Toggle Inline Previews` — per-editor on/off.
 - `RichYAML: Open Custom Preview` — open the side-by-side/custom view when you need a larger canvas.
  - `RichYAML: Show Inline Previews` / `RichYAML: Hide Inline Previews` — explicit controls for visibility.
@@ -35,8 +35,8 @@ Limitations and caveats:
 
 Inline insets vs. stable VS Code:
 - True inline webview insets require the proposed API (editorInsets). In stable VS Code builds, this API isn’t enabled, so RichYAML uses a decoration fallback (a compact after-text marker) instead of full inline renders.
-- To try insets during development: run VS Code in Extension Development Host with proposed API enabled, e.g. launch args `--enable-proposed-api TBillTech.richyaml`. Otherwise, use the Custom Preview for rich rendering.
- - Checklist to enable inline insets in dev: (1) set `richyaml.preview.inline.experimentalInsets` to true; (2) launch the Extension Development Host with proposed APIs enabled for `TBillTech.richyaml`. If either is missing, the decoration fallback is used.
+- To try insets during development: run VS Code in Extension Development Host with proposed API enabled, e.g. launch args `--enable-proposed-api TBillTech.richyaml`. The Custom Preview remains the default.
+ - Checklist to enable inline insets in dev: (1) set `richyaml.preview.mode` to `inline` (or use the toggle command in an editor), and optionally enable `richyaml.preview.inline.experimentalInsets`; (2) launch the Extension Development Host with proposed APIs enabled for `TBillTech.richyaml`. If proposed API is off, the decoration fallback is used.
 
 ## Security and accessibility (inline insets)
 

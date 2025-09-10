@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { registerRichYAMLHover } from './hover';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as YAML from 'yaml';
@@ -105,6 +106,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Try enabling inline previews on activation based on setting
   inlineController.bootstrapFromConfig();
+
+  // Register hover provider for YAML/richyaml
+  try { registerRichYAMLHover(context); } catch {}
 }
 
 export function deactivate() {}
