@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { registerRichYAMLHover } from './hover';
+import { registerChartCache } from './chartCache';
+import { registerChartPreRenderer } from './preRender';
 import { registerRichYAMLCodeActions } from './codeActions';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -8,6 +10,9 @@ import { RICHYAML_VERSION } from './version';
 import { parseWithTags, findRichNodes, RichNodeInfo, getPropertyValueRange } from './yamlService';
 
 export function activate(context: vscode.ExtensionContext) {
+  // Track short-lived timers created at activation scope, so we can clear on dispose
+  const actTimers = new Set<NodeJS.Timeout>();
+  context.subscriptions.push(new vscode.Disposable(() => { try { for (const t of Array.from(actTimers)) clearTimeout(t); } catch {} actTimers.clear(); }));
   const disposable = vscode.commands.registerCommand('richyaml.hello', () => {
     vscode.window.showInformationMessage('RichYAML extension is alive.');
   });
@@ -86,7 +91,8 @@ export function activate(context: vscode.ExtensionContext) {
   const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
     if (e.document === vscode.window.activeTextEditor?.document) {
       // Schedule shortly to allow batching
-      setTimeout(refreshActiveContext, 0);
+  const h = setTimeout(() => { try { refreshActiveContext(); } finally { actTimers.delete(h); } }, 0);
+  actTimers.add(h);
     }
   });
   context.subscriptions.push(changeSub);
@@ -107,6 +113,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Try enabling inline previews on activation based on setting
   inlineController.bootstrapFromConfig();
+
+  // Initialize chart cache invalidation hooks
+  try { registerChartCache(context); } catch {}
+  // Start background pre-renderer to warm chart SVG cache
+  try { registerChartPreRenderer(context); } catch {}
 
   // Register hover provider for YAML/richyaml
   try { registerRichYAMLHover(context); } catch {}
@@ -182,16 +193,19 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
 
     // Debounced update on document changes to keep webview smooth
     let updateTimer: NodeJS.Timeout | undefined;
+    let disposed = false;
     const updateWebview = () => {
+      if (disposed) return;
       const text = document.getText();
       const parsed = parseWithTags(text);
       if (parsed.ok) {
-        webview.postMessage({ type: 'document:update', text, tree: parsed.tree });
+        safePostMessage(webview, { type: 'document:update', text, tree: parsed.tree });
       } else {
-        webview.postMessage({ type: 'document:update', text, error: parsed.error });
+        safePostMessage(webview, { type: 'document:update', text, error: parsed.error });
       }
     };
     const scheduleUpdate = () => {
+      if (disposed) return;
       const cfg = vscode.workspace.getConfiguration('richyaml');
       // Reuse inline debounce setting for custom preview updates as well
       const delay = Math.max(0, Number(cfg.get('preview.inline.debounceMs', 150)) || 0);
@@ -210,7 +224,7 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     scheduleUpdate();
       }
     });
-    webviewPanel.onDidDispose(() => changeSub.dispose());
+  webviewPanel.onDidDispose(() => { disposed = true; try { changeSub.dispose(); } catch {} if (updateTimer) { try { clearTimeout(updateTimer); } catch {} updateTimer = undefined; } });
 
     webview.onDidReceiveMessage(async (msg) => {
       switch (msg?.type) {
@@ -223,9 +237,9 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
           const maxPts = Math.max(0, Number(cfg.get('preview.inline.maxDataPoints', 1000)) || 0);
           try {
             const values = await resolveDataFileRelative(document.uri, file, maxPts);
-            webview.postMessage({ type: 'data:resolved', path: msg?.path, file, values });
+      safePostMessage(webview, { type: 'data:resolved', path: msg?.path, file, values });
           } catch (e: any) {
-            webview.postMessage({ type: 'data:error', path: msg?.path, file, error: e?.message || String(e) });
+      safePostMessage(webview, { type: 'data:error', path: msg?.path, file, error: e?.message || String(e) });
           }
           break;
         }
@@ -324,6 +338,15 @@ function getNonce() {
     text += possible.charAt(Math.floor(Math.random() * possible.length));
   }
   return text;
+}
+
+// Post a message to a webview and swallow rejections (e.g., when disposed) to avoid unhandled promise rejections.
+function safePostMessage(webview: vscode.Webview, msg: any): void {
+  try {
+    void webview.postMessage(msg).then(() => {}, () => {});
+  } catch {
+    // ignore
+  }
 }
 
 /**
@@ -536,9 +559,9 @@ function getNonce() {
         const data = this.applyDataGuards(dataRaw, maxPts);
         const payload = { type: cur ? 'preview:update' : 'preview:init', nodeType, data, path: node.path };
 
-    if (cur && cur.line === line) {
+  if (cur && cur.line === line) {
           // Reuse existing inset, just update (fire and forget)
-          try { cur.post(payload); } catch {}
+      try { cur.post(payload); } catch {}
         } else {
           // Need to (re)create
           if (cur) { try { cur.dispose(); } catch {} st.insets.delete(keyPath); }
@@ -547,7 +570,7 @@ function getNonce() {
           const initialLines = nodeType === 'chart' ? 12 : 3;
           const inset = anyVscode.window.createWebviewTextEditorInset(editor, line, initialLines, { enableScripts: true, localResourceRoots: [this.context.extensionUri] });
           inset.webview.html = this.buildInlineNodeHtml(inset.webview);
-          const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
+    const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
             try {
               if (m?.type === 'edit:apply' && Array.isArray(m?.path)) {
                 await this.applyInlineEdit(doc, m);
@@ -574,9 +597,9 @@ function getNonce() {
                 const maxPts2 = Math.max(0, Number(cfg2.get('preview.inline.maxDataPoints', 1000)) || 0);
                 try {
                   const values = await resolveDataFileRelative(doc.uri, file, maxPts2);
-                  inset.webview.postMessage({ type: 'data:resolved', path: m?.path, file, values });
+      safePostMessage(inset.webview, { type: 'data:resolved', path: m?.path, file, values });
                 } catch (e: any) {
-                  inset.webview.postMessage({ type: 'data:error', path: m?.path, file, error: e?.message || String(e) });
+      safePostMessage(inset.webview, { type: 'data:error', path: m?.path, file, error: e?.message || String(e) });
                 }
               }
             } catch (e) {
@@ -584,8 +607,8 @@ function getNonce() {
             }
           });
           // Send initial payload
-          inset.webview.postMessage(payload);
-      st.insets.set(keyPath, { line, dispose: () => { try { sub.dispose(); } catch {} try { inset.dispose(); } catch {} }, post: (msg) => inset.webview.postMessage(msg) });
+    safePostMessage(inset.webview, payload);
+      st.insets.set(keyPath, { line, dispose: () => { try { sub.dispose(); } catch {} try { inset.dispose(); } catch {} }, post: (msg) => inset.webview.postMessage(msg).then(() => true, () => false) });
         }
       }
       // Dispose any insets not needed

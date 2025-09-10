@@ -6,6 +6,11 @@ Use this document to guide your work in this repository. Keep your responses sho
 
 Focus: Work on Stable Editor UX Task S2 (CodeLens and gutter badges).
 
+Notes:
+- S1 is complete (Quick Fix mini editor for equations/charts with precise YAML edits).
+- Rich hovers are in place and use cached SVGs with prerender. Charts use headless Vega.
+- Avoid noisy shutdown by swallowing cancellation on dispose in posts/renders.
+
 Relevant `TODO.md` is in project base path
 Relevant `README.md` is in project base path
 

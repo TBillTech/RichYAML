@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
 import { parseWithTags, findRichNodes, RichNodeInfo } from './yamlService';
+import { renderLatexToSvgDataUri, renderLatexToSvgMarkup } from './hoverRender';
+import * as crypto from 'crypto';
+import * as path from 'path';
+import { renderChartToSvgDataUri } from './chartRender';
+import { getChartCache } from './chartCache';
+import { resolveDataFileRelative } from './dataResolver';
 
 /** Register rich hovers for YAML and RichYAML files. */
 export function registerRichYAMLHover(context: vscode.ExtensionContext) {
@@ -8,8 +14,30 @@ export function registerRichYAMLHover(context: vscode.ExtensionContext) {
 		{ language: 'richyaml' }
 	];
 
+	// In-memory SVG content store + content provider so hovers can load images reliably
+	const scheme = 'richyaml-hover';
+	const svgStore = new Map<string, string>();
+	const svgProvider: vscode.TextDocumentContentProvider = {
+		onDidChange: undefined,
+		provideTextDocumentContent(uri: vscode.Uri): string {
+			// Path like "/<id>.svg"; key is id without extension
+			const id = uri.path.replace(/^\/*/, '').replace(/\.svg$/i, '');
+			const svg = svgStore.get(id) || '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
+			return svg;
+		}
+	};
+	context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(scheme, svgProvider));
+
+	function uriForSvg(svg: string): vscode.Uri {
+		const id = crypto.createHash('sha1').update(svg).digest('hex').slice(0, 24);
+		if (!svgStore.has(id)) svgStore.set(id, svg);
+		return vscode.Uri.parse(`${scheme}:/${id}.svg`);
+	}
+
 	const provider: vscode.HoverProvider = {
-		provideHover(document, position, _token) {
+		async provideHover(document, position, token) {
+			if (token?.isCancellationRequested) return undefined;
+
 			// Fast check: look for a tagged node under cursor
 			const text = document.getText();
 			const offset = document.offsetAt(position);
@@ -43,6 +71,7 @@ export function registerRichYAMLHover(context: vscode.ExtensionContext) {
 				}
 			}
 
+			if (token?.isCancellationRequested) return undefined;
 			const parsed = parseWithTags(text);
 			const payload = parsed.ok ? getNodePayload(parsed.tree as any, node) : undefined;
 
@@ -64,8 +93,27 @@ export function registerRichYAMLHover(context: vscode.ExtensionContext) {
 				const latex = (payload as any)?.latex as string | undefined;
 				const desc = (payload as any)?.desc as string | undefined;
 				if (desc) md.appendMarkdown(`**${escapeMd(desc)}**\n\n`);
-				if (latex) {
-					md.appendCodeblock(latex, 'latex');
+				if (latex && latex.trim()) {
+					// Try data URI first (reliable in hover)
+					if (token?.isCancellationRequested) return undefined;
+					const dataUri = await renderLatexToSvgDataUri(latex, true);
+					if (dataUri) {
+						md.appendMarkdown(`\n![](${dataUri})`);
+					} else {
+						// Fallback to provider URI using raw <svg>
+						if (token?.isCancellationRequested) return undefined;
+						const svg = await renderLatexToSvgMarkup(latex, true);
+						if (svg) {
+							let svgOnly = svg;
+							const i0 = svgOnly.indexOf('<svg');
+							const i1 = svgOnly.indexOf('</svg>');
+							if (i0 >= 0 && i1 > i0) svgOnly = svgOnly.slice(i0, i1 + '</svg>'.length);
+							const imgUri = uriForSvg(svgOnly);
+							md.appendMarkdown(`\n![](${imgUri.toString(true)})`);
+						} else {
+							md.appendMarkdown('_Preview unavailable_');
+						}
+					}
 				} else if ((payload as any)?.mathjson) {
 					const json = safeJson((payload as any).mathjson);
 					md.appendCodeblock(json, 'json');
@@ -73,21 +121,75 @@ export function registerRichYAMLHover(context: vscode.ExtensionContext) {
 					md.appendMarkdown('_No equation details available_');
 				}
 			} else if (node.tag === '!chart') {
+				const cfg = vscode.workspace.getConfiguration('richyaml');
+				const maxPts = Math.max(0, Number(cfg.get('preview.inline.maxDataPoints', 1000)) || 0);
 				const title = (payload as any)?.title as string | undefined;
-				const mark = (payload as any)?.mark as string | undefined;
-				const enc = (payload as any)?.encoding as any | undefined;
-				const x = enc?.x; const y = enc?.y;
 				if (title) md.appendMarkdown(`**${escapeMd(title)}**\n\n`);
-				if (mark) md.appendMarkdown('- Mark: `' + escapeMd(String(mark)) + '`\n');
-				if (x) md.appendMarkdown('- X: field=`' + escapeMd(String(x.field ?? '')) + '`, type=`' + escapeMd(String(x.type ?? '')) + '`\n');
-				if (y) md.appendMarkdown('- Y: field=`' + escapeMd(String(y.field ?? '')) + '`, type=`' + escapeMd(String(y.type ?? '')) + '`\n');
-				if (!title && !mark && !x && !y) {
-					const json = safeJson(payload);
-					md.appendCodeblock(json, 'yaml');
+				// Build a minimal Vega(-Lite-like) spec
+				const spec: any = {};
+				const vegaLite = (payload as any)?.vegaLite;
+				if (vegaLite && typeof vegaLite === 'object') {
+					Object.assign(spec, vegaLite);
+				} else {
+					// Synthesize a tiny spec from mark/encoding/data
+					const mark = (payload as any)?.mark ?? 'line';
+					spec.mark = mark;
+					spec.encoding = (payload as any)?.encoding ?? {};
+				}
+				// Handle data
+				let values: any[] | undefined;
+				const data = (payload as any)?.data;
+				if (data?.values && Array.isArray(data.values)) {
+					values = data.values.slice(0, maxPts);
+				} else if (typeof data?.file === 'string' && data.file) {
+						try { if (!token?.isCancellationRequested) values = await resolveDataFileRelative(document.uri, data.file, maxPts); } catch {}
+				}
+				// Coerce value types if types are declared
+				try {
+					const enc: any = spec.encoding || {};
+					const xf = enc.x?.field; const xt = String(enc.x?.type || '').toLowerCase();
+					const yf = enc.y?.field; const yt = String(enc.y?.type || '').toLowerCase();
+					if (Array.isArray(values)) {
+						values = values.map((r) => {
+							const o: any = { ...r };
+							if (xf && (xt === 'quantitative') && o[xf] != null) o[xf] = Number(o[xf]);
+							if (yf && (yt === 'quantitative') && o[yf] != null) o[yf] = Number(o[yf]);
+							if (xf && (xt === 'temporal') && o[xf] != null) o[xf] = new Date(o[xf]).toISOString();
+							if (yf && (yt === 'temporal') && o[yf] != null) o[yf] = new Date(o[yf]).toISOString();
+							return o;
+						});
+					}
+				} catch {}
+				// Optional explicit size
+				const width = Number((payload as any)?.width) || undefined;
+				const height = Number((payload as any)?.height) || undefined;
+				try {
+					const cache = getChartCache();
+					if (token?.isCancellationRequested) return undefined;
+					const uri = await cache.getOrRender(document.uri.toString(), document.version, node.path, spec, values, width, height);
+					if (uri) {
+						md.appendMarkdown(`\n![](${uri})`);
+					} else {
+						md.appendMarkdown('_Preview unavailable (cache miss after render)_');
+					}
+				} catch (e: any) {
+					const msg = (e?.message ? String(e.message) : String(e)).replace(/[`*_]|\n/g, ' ');
+					md.appendMarkdown(`_Preview unavailable: ${escapeMd(msg)}_`);
 				}
 			} else {
 				md.appendMarkdown('_Unsupported rich node_');
 			}
+
+			// Quick action link to open the mini editor for this node
+			try {
+				const args = [document.uri, node.path, node.tag];
+				const cmdUri = vscode.Uri.parse(
+					`command:richyaml.editNodeAtCursor?${encodeURIComponent(JSON.stringify(args))}`
+				);
+				// Allow a trusted command link
+				md.isTrusted = true;
+				md.appendMarkdown(`\n\n[Edit…](${cmdUri.toString()})`);
+			} catch {}
 
 			const range = new vscode.Range(
 				document.positionAt(node.range.start),

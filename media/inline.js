@@ -19,7 +19,7 @@
 
   function renderEquation(root, data, path) {
     root.innerHTML = '';
-    const hasMath = !!customElements.get('math-field');
+  const hasMath = !!customElements.get('math-field');
     // Keep the equation very compact: no title; just the content
     const body = h('div', { className: 'ry-body ry-body-eq', role: 'group', 'aria-label': hasMath ? 'Equation editor' : 'Equation preview' });
     let tsz;
@@ -33,7 +33,7 @@
         } catch {}
       }, 16);
     };
-    if (hasMath) {
+  if (hasMath) {
       const mf = document.createElement('math-field');
       // Make editable for two-way MVP
       mf.removeAttribute('readonly');
@@ -74,7 +74,11 @@
         } catch {}
       }, 50);
     } else {
-      // Fallback: render LaTeX/plain text without MathLive
+      // Fallback until MathLive defines <math-field>, but keep room and upgrade when ready
+      const mf = document.createElement('math-field');
+      mf.setAttribute('readonly', '');
+      try { mf.value = data.latex ? String(data.latex) : '\text{MathJSON}'; } catch {}
+      body.appendChild(mf);
       const code = h('code', { className: 'ry-fallback' }, data.latex ? String(data.latex) : 'MathJSON');
       body.appendChild(code);
       if (!data.latex && data.mathjson) {
@@ -82,6 +86,14 @@
         body.appendChild(pre);
       }
       root.appendChild(body);
+      try {
+        if (typeof customElements.whenDefined === 'function') {
+          customElements.whenDefined('math-field').then(() => {
+            try { code.remove(); } catch {}
+            postSizeSoon();
+          });
+        }
+      } catch {}
       setTimeout(() => postSizeSoon(), 20);
     }
   }

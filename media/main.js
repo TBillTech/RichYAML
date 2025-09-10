@@ -116,16 +116,22 @@
       }
       field.appendChild(mf);
       card.appendChild(field);
-      setTimeout(() => {
-        if (!customElements.get('math-field')) {
-          // Graceful fallback: show LaTeX/plain text instead of error
-          try { mf.remove(); } catch {}
-          const fallback = document.createElement('code');
-          fallback.className = 'eq-fallback';
-          fallback.textContent = eq.latex ? String(eq.latex) : 'MathJSON';
-          field.appendChild(fallback);
-        }
-      }, 200);
+      // If MathLive isn't ready yet, show a temporary fallback but keep the math-field
+      if (!customElements.get('math-field') && typeof customElements.whenDefined === 'function') {
+        const fallback = document.createElement('code');
+        fallback.className = 'eq-fallback';
+        fallback.textContent = eq.latex ? String(eq.latex) : 'MathJSON';
+        field.appendChild(fallback);
+        try {
+          customElements.whenDefined('math-field').then(() => {
+            try { fallback.remove(); } catch {}
+            // Ensure value is applied after definition
+            try {
+              if (!mf.value && eq.latex) mf.value = String(eq.latex);
+            } catch {}
+          });
+        } catch {}
+      }
       list.appendChild(card);
     });
   }

@@ -167,6 +167,7 @@
     "vsce": "^2.15.0"
   },
   "dependencies": {
+  "mathjax-full": "^3.2.2",
     "mathlive": "^0.107.0",
     "vega": "^6.0.0",
     "vega-interpreter": "^2.0.0",
