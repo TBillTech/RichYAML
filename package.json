@@ -145,6 +145,10 @@
       {
         "command": "richyaml.editNodeAtCursor",
         "title": "RichYAML: Edit Equation/Chart"
+      },
+      {
+        "command": "richyaml.previewNode",
+        "title": "RichYAML: Preview Node"
       }
     ]
   },

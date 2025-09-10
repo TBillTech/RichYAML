@@ -154,6 +154,52 @@ export function findRichNodes(text: string): RichNodeInfo[] {
   }
 }
 
+/**
+ * Try to anchor UI affordances (CodeLens, gutter) to the exact line containing the tag token
+ * (e.g., the line with `!equation` or `!chart`). If not found nearby, fall back to the node start line.
+ */
+export function getTagLineForNode(text: string, node: RichNodeInfo): { line: number; offset: number } {
+  const tag = node.tag.toLowerCase();
+  const tagRe = new RegExp(tag.replace('!', '\\!') + "\\b", 'i');
+  const start = Math.max(0, node.range.start);
+  // Compute line starts around the node
+  const idxToLineStart = (i: number) => {
+    const j = text.lastIndexOf('\n', Math.max(0, i - 1));
+    return j === -1 ? 0 : j + 1;
+  };
+  const curLineStart = idxToLineStart(start);
+  // Helper to get line number from offset
+  const offsetToLine = (i: number) => {
+    let ln = 0;
+    for (let p = text.indexOf('\n', 0); p >= 0 && p < i; p = text.indexOf('\n', p + 1)) ln++;
+    return ln;
+  };
+  // Search current line and up to two previous lines for the tag token
+  const candidates: number[] = [curLineStart];
+  // previous line
+  const prev1End = curLineStart > 0 ? curLineStart - 1 : -1;
+  if (prev1End >= 0) {
+    const prev1Start = idxToLineStart(prev1End);
+    candidates.push(prev1Start);
+    // previous-previous line
+    const prev2End = prev1Start > 0 ? prev1Start - 1 : -1;
+    if (prev2End >= 0) {
+      const prev2Start = idxToLineStart(prev2End);
+      candidates.push(prev2Start);
+    }
+  }
+  for (const lineStart of candidates) {
+    const lineEndIdx = text.indexOf('\n', lineStart);
+    const lineEnd = lineEndIdx === -1 ? text.length : lineEndIdx;
+    const lineSlice = text.slice(lineStart, lineEnd);
+    if (tagRe.test(lineSlice)) {
+      return { line: offsetToLine(lineStart), offset: lineStart };
+    }
+  }
+  // Fallback to node start line
+  return { line: offsetToLine(curLineStart), offset: curLineStart };
+}
+
 /** Find the YAML AST node at a given JSONPath-like path. */
 export function getYamlNodeAtPath(doc: Document.Parsed, path: Array<string | number>): any | undefined {
   let cur: any = (doc as any).contents;

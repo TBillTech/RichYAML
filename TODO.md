@@ -96,9 +96,10 @@ S1) Quick Fix / Code Action: “Edit equation/chart…” [DONE]
 - Outcome: Code action opens a compact webview editor (MathLive for equations; minimal chart controls) and applies `WorkspaceEdit` back to YAML with undo/redo. Minor conflicts handled via insert fallback; errors surfaced inline.
 - Interfaces: `languages.registerCodeActionsProvider` (QuickFix), `WebviewPanel` mini editor, `workspace.applyEdit`, CST range mapping from Task 10, basic schema validation preflight.
 
-S2) CodeLens and gutter badges
-- Outcome: Above each rich node, show CodeLens links: “Preview • Edit”. Optional gutter badges indicate rich content. Clicking Preview focuses/refreshes a pinned side preview for that node; Edit opens the mini editor (S1).
-- Interfaces: `languages.registerCodeLensProvider`, `createTextEditorDecorationType` for gutter icon/after text, commands to open/refresh side preview and edit.
+S2) CodeLens and gutter badges [DONE]
+- Outcome: Above each rich node, show CodeLens links: “Preview • Edit”. Optional gutter badges indicate rich content. Clicking Preview focuses the node line and shows a hover preview; Edit opens the mini editor (S1).
+- Interfaces: `languages.registerCodeLensProvider`, `createTextEditorDecorationType` for gutter icon, commands to open/refresh preview and edit.
+	- Implemented: CodeLens provider with Preview/Edit over each `!equation`/`!chart`; gutter badges with small SVG icons; command `richyaml.previewNode` to reveal line and show hover.
 
 S3) Side preview panel (auto-synced)
 - Outcome: A narrow side panel shows a live preview of the currently selected/nearest rich node while keeping the full YAML visible in the Text Editor. Updates on cursor move/selection and document changes; supports multiple nodes with simple navigation.
@@ -199,3 +200,4 @@ S3) Side preview panel (auto-synced)
  - 2025-09-10: Updated default preview mode to `custom` (inline off by default). README updated to reflect the new default and how to enable inline insets; hover provider added for `!equation` and `!chart` with improved targeting.
  - 2025-09-10: Completed Stable Editor UX Task S1. Added Quick Fix “Edit equation/chart…” and command `RichYAML: Edit Equation/Chart` that opens a compact mini editor using the inline renderer bundle; edits write back via precise ranges. README bumped to v0.1.19.
  - 2025-09-10: Stabilized rich hovers and chart pipeline. Equations render as MathJax SVG data URIs; charts render headlessly via Vega to SVG with a lite-like compiler, value coercion, and better scale defaults. Added an in-memory SVG cache keyed by doc+node+version with a background pre-renderer to warm the cache. Switched Vega loader to dynamic import to avoid ESM/require issues and surfaced precise hover error messages. Hardened shutdown by guarding timers and webview posts to avoid unhandled cancellations when the extension host terminates.
+ - 2025-09-10: Completed Stable Editor UX Task S2. Added CodeLens (Preview • Edit) and gutter badges for rich nodes; new command `RichYAML: Preview Node`. README bumped to v0.1.20.

@@ -1,4 +1,4 @@
-# RichYAML v0.1.19
+# RichYAML v0.1.20
 VSCode Extension to view/edit YAML with in place rendering of formulas and charts (and more)
 
 YAML as a single, portable “source of truth” with equations stored as MathJSON and declarative charts.

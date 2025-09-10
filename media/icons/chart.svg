@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" role="img" aria-label="chart sine">
+  <!-- Axes: left and bottom -->
+  <path d="M4 4 V28 H30" fill="none" stroke="#111" stroke-width="1.5"/>
+  <!-- Full-cycle sine wave (y = 16 - 10*sin(0..2π)) from x=4 to x=30 -->
+  <path d="M4,16
+           L6.167,11
+           L8.333,7.34
+           L10.5,6
+           L12.667,7.34
+           L14.833,11
+           L17,16
+           L19.167,21
+           L21.333,24.66
+           L23.5,26
+           L25.667,24.66
+           L27.833,21
+           L30,16" 
+        fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

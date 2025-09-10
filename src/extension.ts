@@ -3,6 +3,8 @@ import { registerRichYAMLHover } from './hover';
 import { registerChartCache } from './chartCache';
 import { registerChartPreRenderer } from './preRender';
 import { registerRichYAMLCodeActions } from './codeActions';
+import { registerRichYAMLCodeLens } from './codeLens';
+import { registerGutterBadges } from './gutter';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as YAML from 'yaml';
@@ -124,6 +126,10 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register code actions for S1 and the edit command
   try { registerRichYAMLCodeActions(context); } catch {}
+  // Register CodeLens (S2)
+  try { registerRichYAMLCodeLens(context); } catch {}
+  // Register gutter badges (S2)
+  try { registerGutterBadges(context); } catch {}
   context.subscriptions.push(
     vscode.commands.registerCommand('richyaml.editNodeAtCursor', async (uri?: vscode.Uri, pathSegs?: Array<string|number>, tag?: string) => {
       const editor = vscode.window.activeTextEditor;
@@ -168,6 +174,28 @@ export function activate(context: vscode.ExtensionContext) {
         }
       });
       panel.onDidDispose(() => { try { sub.dispose(); } catch {} try { controller.dispose(); } catch {} });
+    })
+  );
+
+  // Preview command for CodeLens: momentarily show hover at node line
+  context.subscriptions.push(
+  vscode.commands.registerCommand('richyaml.previewNode', async (uri?: vscode.Uri, pathSegs?: Array<string|number>, tag?: string) => {
+      try {
+        const doc = uri ? await vscode.workspace.openTextDocument(uri) : vscode.window.activeTextEditor?.document;
+        if (!doc) return;
+        const editor = await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });
+        const text = doc.getText();
+        const nodes = findRichNodes(text);
+        const pathKey = JSON.stringify(Array.isArray(pathSegs) ? pathSegs : []);
+        const node = nodes.find(n => JSON.stringify(n.path) === pathKey) || nodes[0];
+        if (!node) return;
+        const pos = doc.positionAt(node.range.start);
+        const range = new vscode.Range(pos, pos);
+    // Move cursor, reveal, and trigger hover
+    editor.selection = new vscode.Selection(pos, pos);
+    editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    await vscode.commands.executeCommand('editor.action.showHover');
+      } catch {}
     })
   );
 }
