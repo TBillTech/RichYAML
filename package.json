@@ -185,7 +185,7 @@
   },
   "scripts": {
     "prebuild": "node scripts/extract-version.js && node scripts/bundle-vega.js",
-  "build": "rm -rf out && esbuild src/extension.ts --bundle --platform=node --target=node20 --outfile=out/extension.js --external:vscode",
+    "build": "rimraf out && esbuild src/extension.ts --bundle --platform=node --target=node20 --outfile=out/extension.js --external:vscode",
     "watch": "npm run prebuild && node ./node_modules/typescript/bin/tsc -watch -p ./",
     "lint": "echo 'No linter configured'",
     "prepare": "node scripts/extract-version.js",
@@ -198,6 +198,7 @@
     "@types/vscode": "^1.90.0",
     "@types/yaml": "^1.9.7",
     "esbuild": "^0.21.5",
+    "rimraf": "^6.0.1",
     "typescript": "^5.5.4",
     "vsce": "^2.15.0"
   },

@@ -27,6 +27,7 @@
       "outFiles": [
           "${workspaceFolder}/out/**/*.js"
       ],
+      "preLaunchTask": "Build Extension"
     }
   ]
 }
