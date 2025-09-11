@@ -4,7 +4,7 @@ Use this document to guide your work in this repository. Keep your responses sho
 
 ## Next steps
 
-Focus: Work on Stable Editor UX Task S3 (Side preview panel - auto-synced).
+Focus: Start v0.2 Task 21 (Schema validation surfacing in preview) — show friendly errors/warnings for invalid equation/chart nodes in inline and side previews.
 
 Relevant `TODO.md` is in project base path
 Relevant `README.md` is in project base path

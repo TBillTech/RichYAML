@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as YAML from 'yaml';
 import { RICHYAML_VERSION } from './version';
 import { parseWithTags, findRichNodes, RichNodeInfo, getPropertyValueRange } from './yamlService';
+import { RichYAMLViewProvider } from './sidePreview';
 
 export function activate(context: vscode.ExtensionContext) {
   // Track short-lived timers created at activation scope, so we can clear on dispose
@@ -58,6 +59,15 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Focus the side preview view if present
+  context.subscriptions.push(
+    vscode.commands.registerCommand('richyaml.showSidePreview', async () => {
+      try { await vscode.commands.executeCommand('workbench.view.explorer'); } catch {}
+      try { await vscode.commands.executeCommand('workbench.views.service.refreshView', 'richyaml.sidePreview'); } catch {}
+      try { await vscode.commands.executeCommand('workbench.views.focusView', 'richyaml.sidePreview'); } catch {}
+    })
+  );
+
   // Detect RichYAML files/tags and set a context key for UI/feature gating.
   const setContext = (value: boolean) =>
     vscode.commands.executeCommand('setContext', 'richyaml.isRichYAML', value);
@@ -66,12 +76,15 @@ export function activate(context: vscode.ExtensionContext) {
 
   function looksLikeRichYAML(doc: vscode.TextDocument | undefined): boolean {
     if (!doc) return false;
-    const isYamlLike = doc.languageId === 'yaml' || doc.languageId === 'richyaml';
-    if (!isYamlLike) return false;
+  // If explicitly in 'richyaml' language mode, treat as RichYAML.
+  if (doc.languageId === 'richyaml') return true;
+  const isYamlLike = doc.languageId === 'yaml';
+  if (!isYamlLike) return false;
     const name = doc.uri.fsPath.toLowerCase();
     if (name.endsWith('.r.yaml') || name.endsWith('.r.yml')) return true;
-    // Heuristic: scan for RichYAML tags in the first ~2000 chars to be cheap.
-    const text = doc.getText(new vscode.Range(0, 0, Math.min(2000, doc.lineCount), 0));
+  // Heuristic: scan for RichYAML tags in the first ~2000 chars to be cheap.
+  // Use character slicing instead of a line-based range to avoid off-by-one issues.
+  const text = doc.getText().slice(0, 2000);
     return richTagRegex.test(text);
   }
 
@@ -130,6 +143,18 @@ export function activate(context: vscode.ExtensionContext) {
   try { registerRichYAMLCodeLens(context); } catch {}
   // Register gutter badges (S2)
   try { registerGutterBadges(context); } catch {}
+  // Register side preview view (S3)
+  try {
+    console.log('[RichYAML] Registering side preview WebviewViewProvider...');
+    const provider = new RichYAMLViewProvider(context);
+    context.subscriptions.push(provider);
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(RichYAMLViewProvider.viewType, provider, { webviewOptions: { retainContextWhenHidden: true } })
+    );
+    console.log('[RichYAML] Side preview WebviewViewProvider registered.');
+  } catch (e) {
+    console.error('[RichYAML] Failed to register side preview provider:', e);
+  }
   context.subscriptions.push(
     vscode.commands.registerCommand('richyaml.editNodeAtCursor', async (uri?: vscode.Uri, pathSegs?: Array<string|number>, tag?: string) => {
       const editor = vscode.window.activeTextEditor;

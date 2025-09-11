@@ -101,9 +101,10 @@ S2) CodeLens and gutter badges [DONE]
 - Interfaces: `languages.registerCodeLensProvider`, `createTextEditorDecorationType` for gutter icon, commands to open/refresh preview and edit.
 	- Implemented: CodeLens provider with Preview/Edit over each `!equation`/`!chart`; gutter badges with small SVG icons; command `richyaml.previewNode` to reveal line and show hover.
 
-S3) Side preview panel (auto-synced)
+S3) Side preview panel (auto-synced) [DONE]
 - Outcome: A narrow side panel shows a live preview of the currently selected/nearest rich node while keeping the full YAML visible in the Text Editor. Updates on cursor move/selection and document changes; supports multiple nodes with simple navigation.
 - Interfaces: `window.registerWebviewViewProvider` (contributes.views), message passing `preview:update`, YAML node resolution by cursor (Task 10), debounced updates, CSP-safe rendering using existing renderer.
+	- Implemented: `richyaml.sidePreview` view in Explorer. Auto-syncs to selection and doc changes, uses existing `media/inline.js` renderer with strict CSP and local assets. Handles `data:request` and forwards edits via existing edit command.
 
 ## v0.2 Usability
 
@@ -201,3 +202,4 @@ S3) Side preview panel (auto-synced)
  - 2025-09-10: Completed Stable Editor UX Task S1. Added Quick Fix “Edit equation/chart…” and command `RichYAML: Edit Equation/Chart` that opens a compact mini editor using the inline renderer bundle; edits write back via precise ranges. README bumped to v0.1.19.
  - 2025-09-10: Stabilized rich hovers and chart pipeline. Equations render as MathJax SVG data URIs; charts render headlessly via Vega to SVG with a lite-like compiler, value coercion, and better scale defaults. Added an in-memory SVG cache keyed by doc+node+version with a background pre-renderer to warm the cache. Switched Vega loader to dynamic import to avoid ESM/require issues and surfaced precise hover error messages. Hardened shutdown by guarding timers and webview posts to avoid unhandled cancellations when the extension host terminates.
  - 2025-09-10: Completed Stable Editor UX Task S2. Added CodeLens (Preview • Edit) and gutter badges for rich nodes; new command `RichYAML: Preview Node`. README bumped to v0.1.20.
+ - 2025-09-10: Completed Stable Editor UX Task S3. Added side preview Webview View (`richyaml.sidePreview`) that auto-syncs to the selected/nearest rich node and supports edits/data requests using the inline renderer. README bumped to v0.1.21.

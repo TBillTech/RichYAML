@@ -2,7 +2,7 @@
   "name": "richyaml",
   "displayName": "RichYAML",
   "description": "View/edit YAML with rendered equations and charts.",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "publisher": "TBillTech",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
@@ -12,8 +12,9 @@
   "engines": {
     "vscode": "^1.90.0"
   },
-  "enabledApiProposals": [
-    "editorInsets"
+  "extensionKind": [
+    "ui",
+    "workspace"
   ],
   "categories": [
     "Other"
@@ -23,7 +24,8 @@
     "onLanguage:richyaml",
     "onLanguage:yaml",
     "workspaceContains:**/*.r.yaml",
-    "workspaceContains:**/*.r.yml"
+    "workspaceContains:**/*.r.yml",
+    "onView:richyaml.sidePreview"
   ],
   "contributes": {
     "configuration": [
@@ -121,6 +123,24 @@
         "priority": "option"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "richyaml",
+          "title": "RichYAML",
+          "icon": "./media/icons/chart.svg"
+        }
+      ]
+    },
+    "views": {
+      "richyaml": [
+        {
+          "id": "richyaml.sidePreview",
+          "name": "RichYAML Preview",
+          "icon": "./media/icons/chart.svg"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "richyaml.hello",
@@ -149,13 +169,24 @@
       {
         "command": "richyaml.previewNode",
         "title": "RichYAML: Preview Node"
+      },
+      {
+        "command": "richyaml.showSidePreview",
+        "title": "RichYAML: Show Side Preview"
+      }
+    ],
+    "viewsWelcome": [
+      {
+        "view": "richyaml.sidePreview",
+        "contents": "RichYAML side preview will show the selected equation/chart.\n\nOpen a YAML file with !equation or !chart to get started.",
+        "when": "!richyaml.isRichYAML"
       }
     ]
   },
   "scripts": {
-  "prebuild": "node scripts/extract-version.js && node scripts/bundle-vega.js",
-  "build": "node ./node_modules/typescript/bin/tsc -p ./",
-  "watch": "npm run prebuild && node ./node_modules/typescript/bin/tsc -watch -p ./",
+    "prebuild": "node scripts/extract-version.js && node scripts/bundle-vega.js",
+  "build": "rm -rf out && esbuild src/extension.ts --bundle --platform=node --target=node20 --outfile=out/extension.js --external:vscode",
+    "watch": "npm run prebuild && node ./node_modules/typescript/bin/tsc -watch -p ./",
     "lint": "echo 'No linter configured'",
     "prepare": "node scripts/extract-version.js",
     "vscode:prepublish": "npm run prebuild && npm run build",
@@ -171,7 +202,7 @@
     "vsce": "^2.15.0"
   },
   "dependencies": {
-  "mathjax-full": "^3.2.2",
+    "mathjax-full": "^3.2.2",
     "mathlive": "^0.107.0",
     "vega": "^6.0.0",
     "vega-interpreter": "^2.0.0",
