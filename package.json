@@ -137,7 +137,8 @@
         {
           "id": "richyaml.sidePreview",
           "name": "RichYAML Preview",
-          "icon": "./media/icons/chart.svg"
+          "icon": "./media/icons/chart.svg",
+          "type": "webview"
         }
       ]
     },
