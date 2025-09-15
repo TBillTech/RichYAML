@@ -1,6 +1,11 @@
 /* Inline inset renderer for a single RichYAML node (equation/chart) */
 (function () {
   const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+  // Detect side panel preview mode (script tag may include data-mode)
+  let panelMode = 'edit';
+  try {
+    const curScript = document.currentScript; if (curScript) { const m = curScript.getAttribute('data-mode'); if (m) panelMode = m; }
+  } catch {}
 
   function h(tag, attrs, ...children) {
     const el = document.createElement(tag);
@@ -35,13 +40,13 @@
     };
   if (hasMath) {
       const mf = document.createElement('math-field');
-      // Make editable for two-way MVP
-      mf.removeAttribute('readonly');
+  // Make editable unless panel is in read-only preview mode
+  if(panelMode !== 'preview') mf.removeAttribute('readonly'); else mf.setAttribute('readonly','');
       mf.setAttribute('virtual-keyboard-mode', 'manual');
       mf.setAttribute('aria-label', 'Equation latex editor');
-      try { mf.value = data.latex ? String(data.latex) : '\\text{MathJSON}'; } catch {}
-      body.appendChild(mf);
-      if (!data.latex && data.mathjson) {
+  try { mf.value = (data.latex !== undefined && data.latex !== null) ? String(data.latex) : (data.mathjson ? '' : '\\text{MathJSON}'); } catch {}
+  body.appendChild(mf);
+  if ((data.latex === undefined || data.latex === null) && data.mathjson) {
         const pre = h('pre', { className: 'ry-json', role: 'region', 'aria-label': 'Equation MathJSON' }, JSON.stringify(data.mathjson, null, 2));
         body.appendChild(pre);
       }
@@ -61,15 +66,17 @@
         root.appendChild(banner);
       }
       // Debounced change -> host edit apply
-      let t;
-      const send = () => {
-        if (!vscode) return;
-        const payload = { type: 'edit:apply', path, key: 'latex', edit: 'set', value: mf.value || '' };
-        vscode.postMessage(payload);
-      };
-      const onInput = () => { clearTimeout(t); t = setTimeout(send, 200); postSizeSoon(); };
-      mf.addEventListener('input', onInput);
-      mf.addEventListener('keydown', (e) => {
+      if(panelMode !== 'preview'){
+        let t;
+        const send = () => {
+          if (!vscode) return;
+          const payload = { type: 'edit:apply', path, key: 'latex', edit: 'set', value: mf.value || '' };
+          vscode.postMessage(payload);
+        };
+        const onInput = () => { clearTimeout(t); t = setTimeout(send, 200); postSizeSoon(); };
+        mf.addEventListener('input', onInput);
+      }
+  mf.addEventListener('keydown', (e) => {
         // Accessibility: Esc or Ctrl+Enter returns focus to container/editor
         if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
           e.preventDefault();
@@ -91,11 +98,11 @@
       // Fallback until MathLive defines <math-field>, but keep room and upgrade when ready
       const mf = document.createElement('math-field');
       mf.setAttribute('readonly', '');
-      try { mf.value = data.latex ? String(data.latex) : '\text{MathJSON}'; } catch {}
+  try { mf.value = (data.latex !== undefined && data.latex !== null) ? String(data.latex) : (data.mathjson ? '' : '\\text{MathJSON}'); } catch {}
       body.appendChild(mf);
-      const code = h('code', { className: 'ry-fallback' }, data.latex ? String(data.latex) : 'MathJSON');
+  const code = h('code', { className: 'ry-fallback' }, (data.latex !== undefined && data.latex !== null) ? String(data.latex) : (data.mathjson ? '' : 'MathJSON'));
       body.appendChild(code);
-      if (!data.latex && data.mathjson) {
+  if ((data.latex === undefined || data.latex === null) && data.mathjson) {
         const pre = h('pre', { className: 'ry-json', role: 'region', 'aria-label': 'Equation MathJSON' }, JSON.stringify(data.mathjson, null, 2));
         body.appendChild(pre);
       }
@@ -382,8 +389,21 @@
     if (msg.type !== 'preview:init' && msg.type !== 'preview:update') return;
     const root = document.getElementById('root');
     if (!root) return;
-  if (msg.nodeType === 'equation') renderEquation(root, msg.data, msg.path, msg.issues);
-  else if (msg.nodeType === 'chart') renderChart(root, msg.data, msg.path, msg.issues);
+    // Focus-preserving fast path for equation updates
+    if (msg.type === 'preview:update' && msg.nodeType === 'equation') {
+      const mf = root.querySelector('math-field');
+      if (mf && document.activeElement === mf) {
+        // Only update value if it's different; keep focus
+        try {
+          const newLatexRaw = msg?.data?.latex;
+          const newLatex = (newLatexRaw !== undefined && newLatexRaw !== null) ? String(newLatexRaw) : (msg?.data?.mathjson ? '' : '');
+          if (mf.value !== newLatex) mf.value = newLatex;
+        } catch {}
+        return; // Skip full re-render to retain focus & selection
+      }
+    }
+    if (msg.nodeType === 'equation') renderEquation(root, msg.data, msg.path, msg.issues);
+    else if (msg.nodeType === 'chart') renderChart(root, msg.data, msg.path, msg.issues);
   }
 
   window.addEventListener('message', onMessage);

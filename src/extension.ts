@@ -9,7 +9,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as YAML from 'yaml';
 import { RICHYAML_VERSION } from './version';
-import { parseWithTags, findRichNodes, RichNodeInfo, getPropertyValueRange } from './yamlService';
+import { parseWithTags, findRichNodes, RichNodeInfo } from './yamlService';
+import { applyRichNodeEdit } from './applyEdits';
 import { validateEquation, validateChart } from './validation';
 import { RichYAMLViewProvider } from './sidePreview';
 
@@ -66,6 +67,27 @@ export function activate(context: vscode.ExtensionContext) {
       try { await vscode.commands.executeCommand('workbench.view.explorer'); } catch {}
       try { await vscode.commands.executeCommand('workbench.views.service.refreshView', 'richyaml.sidePreview'); } catch {}
       try { await vscode.commands.executeCommand('workbench.views.focusView', 'richyaml.sidePreview'); } catch {}
+    })
+  );
+
+  // Toggle side panel mode (edit <-> preview)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('richyaml.toggleSidePanelMode', async () => {
+      const cfg = vscode.workspace.getConfiguration('richyaml');
+      const cur = cfg.get<string>('sidePanel.mode', 'edit');
+      const next = cur === 'edit' ? 'preview' : 'edit';
+      await cfg.update('sidePanel.mode', next, vscode.ConfigurationTarget.Global);
+      vscode.window.setStatusBarMessage(`RichYAML side panel mode: ${next}`, 2500);
+      try { await vscode.commands.executeCommand('workbench.views.service.refreshView', 'richyaml.sidePreview'); } catch {}
+    })
+  );
+
+  // React to configuration changes that affect side panel rendering
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('richyaml.sidePanel.mode') || e.affectsConfiguration('richyaml.sidePreview.contextWindow')) {
+        try { vscode.commands.executeCommand('workbench.views.service.refreshView', 'richyaml.sidePreview'); } catch {}
+      }
     })
   );
 
@@ -187,10 +209,9 @@ export function activate(context: vscode.ExtensionContext) {
         panel.webview.postMessage(payload);
       }
       // Handle edits and data requests similarly to inline insets
-      const controller = new InlinePreviewController(context);
       const sub = panel.webview.onDidReceiveMessage(async (m) => {
         if (m?.type === 'edit:apply') {
-          await (controller as any).applyInlineEdit(doc, m);
+          await applyRichNodeEdit(doc, m);
         } else if (m?.type === 'data:request') {
           try {
             const values = await resolveDataFileRelative(doc.uri, String(m.file || ''), Number(vscode.workspace.getConfiguration('richyaml').get('preview.inline.maxDataPoints', 1000)) || 0);
@@ -200,7 +221,7 @@ export function activate(context: vscode.ExtensionContext) {
           }
         }
       });
-      panel.onDidDispose(() => { try { sub.dispose(); } catch {} try { controller.dispose(); } catch {} });
+      panel.onDidDispose(() => { try { sub.dispose(); } catch {} });
     })
   );
 
@@ -629,7 +650,7 @@ function safePostMessage(webview: vscode.Webview, msg: any): void {
     const sub = inset.webview.onDidReceiveMessage(async (m: any) => {
             try {
               if (m?.type === 'edit:apply' && Array.isArray(m?.path)) {
-                await this.applyInlineEdit(doc, m);
+                await applyRichNodeEdit(doc, m);
               } else if (m?.type === 'focus:return') {
                 try {
                   vscode.window.showTextDocument(doc, editor.viewColumn, false).then(() => {
@@ -782,132 +803,7 @@ function safePostMessage(webview: vscode.Webview, msg: any): void {
     const lines = Math.ceil(px / Math.max(8, lineHeightPx));
     return Math.max(1, lines);
   }
-  private async applyInlineEdit(doc: vscode.TextDocument, msg: any) {
-    // Supports:
-    // - Equation: { key: 'latex', value }
-    // - Chart: { propPath: ['encoding','x','field'], value }
-    const nodePath = msg.path as Array<string | number>;
-    const propPath: string[] | undefined = Array.isArray(msg.propPath) ? msg.propPath : undefined;
-    const editKind = String(msg.edit || 'set');
-    if (editKind !== 'set') return;
-    const value = msg.value;
-    const fullText = doc.getText();
-
-    // Simple schema-ish validation for chart edits
-    if (propPath && propPath.length) {
-      const top = propPath[0];
-      if (top === 'mark') {
-        const allowed = new Set(['line','bar','point']);
-        if (!allowed.has(String(value).toLowerCase())) return; // ignore invalid
-      }
-      if ((top === 'encoding') && propPath.length >= 3 && (propPath[2] === 'type')) {
-        const allowedTypes = new Set(['quantitative','nominal','temporal','ordinal']);
-        if (!allowedTypes.has(String(value).toLowerCase())) return;
-      }
-    }
-
-    const wsEdit = new vscode.WorkspaceEdit();
-
-    if (!propPath || propPath.length === 0) {
-      // Back-compat: single key under node (equation.latex)
-      const key = typeof msg.key === 'string' ? msg.key : 'latex';
-      const range = getPropertyValueRange(fullText, nodePath, key);
-      if (range) {
-        const start = doc.positionAt(range.start);
-        const end = doc.positionAt(range.end);
-        const yamlScalar = JSON.stringify(String(value));
-        wsEdit.replace(doc.uri, new vscode.Range(start, end), yamlScalar);
-      } else {
-        // Insert missing property as scalar under the node map
-        const nodes = findRichNodes(fullText);
-        const node = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(nodePath));
-        const insertPos = node ? doc.positionAt(node.range.start) : new vscode.Position(0, 0);
-        const indent = '  ';
-        const yamlScalar = JSON.stringify(String(value));
-        const insertText = `\n${indent}${key}: ${yamlScalar}`;
-        wsEdit.insert(doc.uri, insertPos.translate(1, 0), insertText);
-      }
-    } else {
-      // Nested path set under nodePath (only maps, no arrays for MVP)
-      // Try to find deepest existing property value range; otherwise insert new lines progressively.
-      const [topKey, ...rest] = propPath;
-      const topRange = getPropertyValueRange(fullText, nodePath, topKey);
-      if (!rest.length) {
-        // Simple property under node
-        if (topRange) {
-          const start = doc.positionAt(topRange.start);
-          const end = doc.positionAt(topRange.end);
-          const yamlScalar = JSON.stringify(String(value));
-          wsEdit.replace(doc.uri, new vscode.Range(start, end), yamlScalar);
-        } else {
-          // Insert new top-level property
-          const nodes = findRichNodes(fullText);
-          const node = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(nodePath));
-          const insertPos = node ? doc.positionAt(node.range.start) : new vscode.Position(0, 0);
-          const indent = '  ';
-          const yamlScalar = JSON.stringify(String(value));
-          const insertText = `\n${indent}${topKey}: ${yamlScalar}`;
-          wsEdit.insert(doc.uri, insertPos.translate(1, 0), insertText);
-        }
-      } else {
-        // Need to set a nested property (e.g., encoding.x.field)
-        // We'll insert minimal structure if missing.
-        const text = doc.getText();
-        const lines = text.split(/\r?\n/);
-        const nodes = findRichNodes(text);
-        const node = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(nodePath));
-        const anchorPos = node ? doc.positionAt(node.range.start) : new vscode.Position(0,0);
-        const anchorLine = anchorPos.line;
-        const indent = '  ';
-        // Build YAML snippet for missing path
-  const snippet = (keys: string[], finalValue: unknown) => {
-          let s = '';
-          for (let i = 0; i < keys.length - 1; i++) s += `\n${indent.repeat(i+1)}${keys[i]}:`;
-          const lastKey = keys[keys.length - 1];
-          const scalar = JSON.stringify(String(finalValue));
-          s += `\n${indent.repeat(keys.length)}${lastKey}: ${scalar}`;
-          return s;
-        };
-        // Find if topKey exists; if not, insert whole chain
-        if (!topRange) {
-          const insertText = snippet(propPath, value);
-          wsEdit.insert(doc.uri, anchorPos.translate(1, 0), insertText);
-        } else if (rest.length === 1) {
-          // editing e.g., encoding.title
-          const subKey = rest[0];
-          const subRange = getPropertyValueRange(fullText, nodePath.concat(topKey as any), subKey);
-          if (subRange) {
-            const start = doc.positionAt(subRange.start);
-            const end = doc.positionAt(subRange.end);
-            wsEdit.replace(doc.uri, new vscode.Range(start, end), JSON.stringify(String(value)));
-          } else {
-            // Insert under existing topKey map
-            const topStart = doc.positionAt(topRange.start);
-            wsEdit.insert(doc.uri, topStart.translate(1, 0), `\n${indent}${subKey}: ${JSON.stringify(String(value))}`);
-          }
-        } else {
-          // encoding.x.field style nested
-          const pathToX = nodePath.concat(topKey as any);
-          const xExists = getPropertyValueRange(fullText, pathToX, rest[0]);
-          if (!xExists) {
-            const insertText = `\n${indent}${rest[0]}:\n${indent.repeat(2)}${rest[1]}: ${JSON.stringify(String(value))}`;
-            const topStart = doc.positionAt(topRange.start);
-            wsEdit.insert(doc.uri, topStart.translate(1, 0), insertText);
-          } else if (rest.length === 2) {
-            const fieldRange = getPropertyValueRange(fullText, pathToX.concat(rest[0] as any), rest[1]);
-            if (fieldRange) {
-              wsEdit.replace(doc.uri, new vscode.Range(doc.positionAt(fieldRange.start), doc.positionAt(fieldRange.end)), JSON.stringify(String(value)));
-            } else {
-              const xStart = doc.positionAt((xExists as any).start);
-              wsEdit.insert(doc.uri, xStart.translate(1, 0), `\n${indent}${rest[1]}: ${JSON.stringify(String(value))}`);
-            }
-          }
-        }
-      }
-    }
-
-    await vscode.workspace.applyEdit(wsEdit);
-  }
+  // Editing logic refactored into shared applyRichNodeEdit (see applyEdits.ts)
   private resolveNodeData(parsed: ReturnType<typeof parseWithTags>, node: RichNodeInfo): any | undefined {
     if (!parsed || !('ok' in parsed) || !parsed.ok) return undefined;
     const tree: any = parsed.tree as any;

@@ -106,6 +106,26 @@ S3) Side preview panel (auto-synced) [DONE]
 - Interfaces: `window.registerWebviewViewProvider` (contributes.views), message passing `preview:update`, YAML node resolution by cursor (Task 10), debounced updates, CSP-safe rendering using existing renderer.
 	- Implemented: `richyaml.sidePreview` view in Explorer. Auto-syncs to selection and doc changes, uses existing `media/inline.js` renderer with strict CSP and local assets. Handles `data:request` and forwards edits via existing edit command.
 
+S4) Refactor shared edit engine (inline & side) [DONE]
+- Outcome: Extracted inline edit logic to `src/applyEdits.ts` (`applyRichNodeEdit`), removed duplicated method in `InlinePreviewController`, mini editor and side preview now call shared function directly.
+- Interfaces: Shared `applyRichNodeEdit` used by inline insets, mini editor panel, side preview.
+
+S5) Side panel direct two-way editing [DONE]
+- Outcome: Side preview now sends `preview:init` for first/changed node and applies edits directly via shared edit engine (`applyRichNodeEdit`); no mini editor spawn required.
+- Interfaces: `sidePreview.ts` uses `applyRichNodeEdit` and differentiates `preview:init` vs `preview:update`.
+
+Context window enhancement (v0.1.26) [DONE]
+- Outcome: Side preview can optionally show neighboring rich nodes (read-only) around the selected node when `richyaml.sidePreview.contextWindow` > 0, providing multi-node context. Current node remains editable; neighbors are summarized.
+- Interfaces: `sidePreview.ts` now sends `preview:multi` with items array; new webview script `media/sideView.js` handles multi-node rendering.
+
+S6) Conflict & path validation in side edits [PLANNED]
+- Outcome: If node path is stale (document changed), re-parse and locate node by structural match (tag + nearest range); show a non-blocking warning banner if edit skipped. Unit tests for stale path and missing property insert cases.
+- Interfaces: `findRichNodes`, parse service, lightweight matching heuristic.
+
+S7) Setting & UX polish for side edit panel [PLANNED]
+- Outcome: Add setting `richyaml.sidePanel.mode` = `preview` | `edit` (default: `edit` once stable). Header label reflects mode; command `RichYAML: Toggle Side Panel Mode`. README updated to advertise side editing.
+- Interfaces: `contributes.configuration`, commands, view title actions, README.
+
 ## v0.2 Usability
 
 19) Two-way editing: MathLive → YAML
@@ -204,3 +224,9 @@ S3) Side preview panel (auto-synced) [DONE]
  - 2025-09-10: Completed Stable Editor UX Task S2. Added CodeLens (Preview • Edit) and gutter badges for rich nodes; new command `RichYAML: Preview Node`. README bumped to v0.1.20.
  - 2025-09-10: Completed Stable Editor UX Task S3. Added side preview Webview View (`richyaml.sidePreview`) that auto-syncs to the selected/nearest rich node and supports edits/data requests using the inline renderer. README bumped to v0.1.21.
  - 2025-09-15: Completed v0.2 Task 21. Added lightweight validation module surfacing errors/warnings (missing mathjson, chart title/encoding/data) in inline and side previews via issue banners. README bumped to v0.1.22.
+- 2025-09-15: Completed Stable Editor UX Task S4. Refactored shared edit engine into `applyEdits.ts`; side preview now applies edits directly without command indirection; removed duplicate logic from inline controller. README bumped to v0.1.23.
+- 2025-09-15: Completed Stable Editor UX Task S5. Side panel now directly edits YAML using shared engine with proper preview:init/update messages; removed dependency on mini editor for side edits. README bumped to v0.1.24.
+ - 2025-09-15: Focus preservation fix: equation inline/side edits no longer steal focus back to YAML on each preview update by incremental updating math-field. README bumped to v0.1.25.
+ - 2025-09-15: Added side preview multi-node context window and interactive chart controls with neighbor navigation & fold preservation. README bumped to v0.1.26.
+ - 2025-09-15: Completed Stable Editor UX Task S6. Added path validation & stale edit skipping with warning banner (edit:skipped) plus heuristic fallback. README unchanged (feature internal) but version context advanced.
+ - 2025-09-15: Completed Stable Editor UX Task S7. Added `richyaml.sidePanel.mode` setting (edit|preview) and toggle command. Side panel honors preview (read-only). README bumped to v0.1.27.

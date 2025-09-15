@@ -4,7 +4,21 @@ Use this document to guide your work in this repository. Keep your responses sho
 
 ## Next steps
 
-Focus: Start v0.2 Task 22 ("Open in Vega Editor" affordance) — add a button/command to open the current chart spec in the online Vega Editor (generate Vega-Lite spec, inline or strip data as needed).
+Focus: Begin v0.2 Task 19 (Two-way editing: MathLive → YAML `mathjson` sync).
+
+### Task 19 Breakdown (planning)
+Goal: When editing an equation's LaTeX in inline/side/mini editors, update canonical `mathjson` structure (round-trip) and optionally regenerate `latex` if absent. Preserve undo/redo and handle conflict cases.
+
+Planned subtasks:
+1. MathJSON generation API: Introduce a light adapter to MathLive / (future) Compute Engine. Placeholder: parse updated LaTeX into a stub MathJSON object (graceful fallback if parsing unavailable).
+2. Edit pipeline change: Extend `edit:apply` handling in `applyRichNodeEdit` for equations so that when key='latex' is set, it also updates or inserts `mathjson` node property (unless disabled by a future setting).
+3. Conflict resolution: If path validation fails (existing S6 logic), skip and warn; do not attempt heuristic mathjson insertion to avoid corruption.
+4. Incremental latency: Debounce LaTeX→MathJSON conversion (e.g., 300ms) in the webview before posting edit to reduce churn.
+5. Validation integration: After applying edit, re-run equation validation (ensure mathjson present) so banners clear immediately.
+6. Setting (future-friendly): Prepare for a potential `richyaml.equation.updateMathJSON` boolean (default true) but do not add yet—just annotate insertion point.
+7. Tests (future): Plan unit tests for: (a) latex only → adds mathjson; (b) both present → updates mathjson; (c) invalid parse → leaves old mathjson, adds warning.
+
+Assumptions: Compute Engine not yet bundled; will stub parser. Security unchanged. Performance impact minimal with debounce.
 
 Relevant `TODO.md` is in project base path
 Relevant `README.md` is in project base path

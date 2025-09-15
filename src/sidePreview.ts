@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { parseWithTags, findRichNodes, RichNodeInfo } from './yamlService';
+import { parseWithTags, findRichNodes, RichNodeInfo, getTagLineForNode } from './yamlService';
+import { applyRichNodeEdit } from './applyEdits';
 import { validateEquation, validateChart } from './validation';
 import { resolveDataFileRelative } from './dataResolver';
 
@@ -28,8 +29,20 @@ export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.
     const onMsg = webview.onDidReceiveMessage(async (m) => {
       if (!this.lastDoc) return;
       if (m?.type === 'edit:apply') {
-        // Reuse inline edit pathway via command to avoid code duplication.
-        try { await vscode.commands.executeCommand('richyaml.editNodeAtCursor', this.lastDoc.uri, m.path, m?.nodeType === 'chart' ? '!chart' : '!equation'); } catch {}
+        // Respect side panel mode: in preview mode, ignore edits
+        const mode = vscode.workspace.getConfiguration('richyaml').get<string>('sidePanel.mode', 'edit');
+        if (mode === 'preview') {
+          try { webview.postMessage({ type: 'edit:skipped', reason: 'preview-mode', path: m?.path }); } catch {}
+          return;
+        }
+        try {
+          const ok = await applyRichNodeEdit(this.lastDoc, m);
+          if (!ok) {
+            try { webview.postMessage({ type: 'edit:skipped', reason: 'stale-path', path: m?.path }); } catch {}
+            // Force a refresh to resync paths
+            this.scheduleUpdate();
+          }
+        } catch {}
       } else if (m?.type === 'data:request') {
         try {
           const cfg = vscode.workspace.getConfiguration('richyaml');
@@ -39,6 +52,25 @@ export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.
         } catch (e: any) {
           webview.postMessage({ type: 'data:error', path: m?.path, file: m?.file, error: e?.message || String(e) });
         }
+      } else if (m?.type === 'navigate:to') {
+        // Move cursor to the tag line (header) to avoid expanding folded region
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) return;
+        const doc = editor.document;
+        if (doc.uri.toString() !== this.lastDoc.uri.toString()) return;
+        const text = doc.getText();
+        const nodes = findRichNodes(text);
+        const target = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(m.path));
+        if (!target) return;
+        let offset = target.range.start;
+        try {
+          const tagInfo = getTagLineForNode(text, target);
+          if (typeof tagInfo?.offset === 'number') offset = tagInfo.offset;
+        } catch {}
+        const pos = doc.positionAt(offset);
+        editor.selections = [new vscode.Selection(pos, pos)];
+        editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+        this.scheduleUpdate();
       }
     });
     this.disposables.push(onMsg);
@@ -79,10 +111,38 @@ export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.
     if (!parsed.ok) return this.clear();
     const data = this.getNodePayloadFromTree(parsed.tree as any, node);
     if (!data) return this.clear();
+    const previousPath = this.lastNode ? JSON.stringify(this.lastNode.path) : undefined;
+    const nextPath = JSON.stringify(node.path);
+    const first = !this.lastNode || previousPath !== nextPath || this.lastDoc?.uri.toString() !== doc.uri.toString();
     this.lastDoc = doc; this.lastNode = node;
+
+    // Determine context window (neighbor count before/after)
+    const cfg = vscode.workspace.getConfiguration('richyaml');
+  const contextWindow = Math.max(0, Number(cfg.get('sidePreview.contextWindow') ?? cfg.get('richyaml.sidePreview.contextWindow') ?? cfg.get('richyaml.sidePreview.contextWindow', 0)) || 0);
+  const mode = cfg.get<string>('sidePanel.mode', 'edit');
+
+    if (contextWindow > 0) {
+      // multi-node payload
+      const centerIndex = nodes.indexOf(node);
+      const items: any[] = [];
+      const start = Math.max(0, centerIndex - contextWindow);
+      const end = Math.min(nodes.length - 1, centerIndex + contextWindow);
+      for (let i = start; i <= end; i++) {
+        const n = nodes[i];
+        const d = this.getNodePayloadFromTree(parsed.tree as any, n);
+        if (!d) continue;
+        const nt = n.tag === '!chart' ? 'chart' : 'equation';
+        const iss = nt === 'equation' ? validateEquation(d) : nt === 'chart' ? validateChart(d) : [];
+        items.push({ nodeType: nt, data: d, path: n.path, current: n === node, issues: iss });
+      }
+  try { this.view.webview.postMessage({ type: 'preview:multi', items, mode }); } catch {}
+      return;
+    }
+
+    // single node path
     const nodeType = node.tag === '!chart' ? 'chart' : 'equation';
-  const issues = nodeType === 'equation' ? validateEquation(data) : nodeType === 'chart' ? validateChart(data) : [];
-  const payload = { type: 'preview:update', nodeType, data, path: node.path, issues };
+    const issues = nodeType === 'equation' ? validateEquation(data) : nodeType === 'chart' ? validateChart(data) : [];
+  const payload = { type: first ? 'preview:init' : 'preview:update', nodeType, data, path: node.path, issues, mode };
     try { this.view.webview.postMessage(payload); } catch {}
   }
 
@@ -115,11 +175,22 @@ export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.
     const nonce = getNonce();
     const cfg = vscode.workspace.getConfiguration('richyaml');
     const allowNet = !!cfg.get('security.allowNetworkResources', false);
+  const contextWindow = Math.max(0, Number(cfg.get('sidePreview.contextWindow') ?? cfg.get('richyaml.sidePreview.contextWindow') ?? cfg.get('richyaml.sidePreview.contextWindow', 0)) || 0);
+  const mode = cfg.get<string>('sidePanel.mode', 'edit');
     const style = [
       `:root{color-scheme:var(--vscode-colorScheme, light dark)}`,
       `body{margin:0;font:12px/1.35 var(--vscode-editor-font-family);color:var(--vscode-foreground);}`,
       `.header{padding:6px 8px;font-weight:600;border-bottom:1px solid var(--vscode-panelSectionHeader-border);}`,
-      `#root{padding:6px 4px;}`
+      `#root{padding:6px 4px;overflow:auto;max-height:100vh;}`,
+      `.ry-node{border-bottom:1px solid var(--vscode-panel-border,#4443);padding:4px 2px;}`,
+      `.ry-node:last-child{border-bottom:none;}`,
+      `.ry-head{font-weight:600;margin-bottom:2px;font-size:11px;opacity:.85;}`,
+      `.ry-body{margin:2px 0 4px;}`,
+      `.ry-chart-summary{font-size:11px;opacity:.75;}`,
+  `.ry-chart-current{font-size:11px;opacity:.6;}`,
+  `.ry-clickable{cursor:pointer;}`,
+  `.ry-clickable:hover{background:var(--vscode-list-hoverBackground,#0001);}`,
+  `.ry-current{background:var(--vscode-list-activeSelectionBackground,#0a639933);}`
     ].join('\n');
     const mathliveCss = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-static.css')).toString();
     const mathliveFontsCss = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-fonts.css')).toString();
@@ -129,7 +200,8 @@ export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.
     const interpLocalFs = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'vega-interpreter.min.js');
     const vegaLocalUri = webview.asWebviewUri(vegaLocalFs);
     const interpLocalUri = webview.asWebviewUri(interpLocalFs);
-    const inlineJsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'inline.js'));
+  const inlineJsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'inline.js'));
+  const sideViewJsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'sideView.js'));
     const csp = [
       `default-src 'none'`,
       `img-src ${webview.cspSource} ${allowNet ? 'https:' : ''} data:`,
@@ -154,7 +226,7 @@ export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.
 <div id="root" role="group" aria-label="RichYAML side preview" tabindex="0"></div>
 <script nonce="${nonce}" src="${mathliveJs}"></script>
 <script nonce="${nonce}" src="${vegaShimUri}" data-vega="${vegaLocalUri}" data-interpreter="${interpLocalUri}"${!allowNet ? ' data-no-network="true"' : ''}></script>
-<script nonce="${nonce}" src="${inlineJsUri}"></script>
+${contextWindow > 0 ? `<script nonce="${nonce}" src="${sideViewJsUri}"></script>` : `<script nonce="${nonce}" src="${inlineJsUri}" data-mode="${mode}"></script>`}
 </body></html>`;
   }
 

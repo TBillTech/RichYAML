@@ -2,7 +2,7 @@
   "name": "richyaml",
   "displayName": "RichYAML",
   "description": "View/edit YAML with rendered equations and charts.",
-  "version": "0.0.3",
+  "version": "0.1.27",
   "publisher": "TBillTech",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
@@ -79,6 +79,18 @@
             "default": 20,
             "minimum": 0,
             "markdownDescription": "Number of extra lines above/below the visible editor range to keep inline previews rendered."
+          },
+          "richyaml.sidePreview.contextWindow": {
+            "type": "number",
+            "default": 0,
+            "minimum": 0,
+            "markdownDescription": "Number of rich nodes before and after the selected node to show in the side preview (read-only neighbors). 0 = only current node." 
+          },
+          "richyaml.sidePanel.mode": {
+            "type": "string",
+            "default": "edit",
+            "enum": ["edit", "preview"],
+            "markdownDescription": "Side panel behavior: 'edit' allows in-panel editing of the current node; 'preview' shows a read-only rendering (use the Edit command or inline previews to modify)."
           }
         }
       }
@@ -146,6 +158,10 @@
       {
         "command": "richyaml.hello",
         "title": "RichYAML: Hello"
+      },
+      {
+        "command": "richyaml.toggleSidePanelMode",
+        "title": "RichYAML: Toggle Side Panel Edit/Preview Mode"
       },
       {
         "command": "richyaml.toggleInlinePreviews",

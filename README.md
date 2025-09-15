@@ -1,4 +1,4 @@
-# RichYAML v0.1.22
+# RichYAML v0.1.27
 VSCode Extension to view/edit YAML with in place rendering of formulas and charts (and more)
 
 YAML as a single, portable “source of truth” with equations stored as MathJSON and declarative charts.
@@ -19,6 +19,8 @@ Settings and commands (planned/rolling out):
 - `RichYAML: Open Custom Preview` — open the side-by-side/custom view when you need a larger canvas.
  - `RichYAML: Show Inline Previews` / `RichYAML: Hide Inline Previews` — explicit controls for visibility.
  - `richyaml.preview.inline.experimentalInsets` (default: false) — use the proposed editorInsets API for true inline webviews. Requires launching the Extension Development Host with proposed APIs enabled for this extension. When off (default on stable VS Code), a lightweight decoration fallback shows a marker instead.
+ - `richyaml.sidePreview.contextWindow` (default: 0) — show neighboring rich nodes (read-only) around the selected one in the side preview, for quick comparison and multi-node context.
+ - `richyaml.sidePanel.mode` (default: edit) — side panel behavior: `edit` enables in-panel editing of the current node; `preview` makes the side panel read-only (use inline previews or the Edit command to modify).
 
 Schema validation surfacing (v0.1.22): Inline and side previews now display friendly banners for missing required fields (e.g., chart title, encoding fields, equation mathjson) and warnings for non-fatal issues (unknown mark/type, extraneous data shape). The first issue is shown inline with a tooltip listing all issues.
 
