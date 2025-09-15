@@ -116,9 +116,9 @@ S3) Side preview panel (auto-synced) [DONE]
 - Outcome: Basic chart panel (title/mark/encodings) updates YAML nodes.
 - Interfaces: Same messaging/edit application as above; validation against schema prior to edit.
 
-21) Schema validation surfacing in preview
+21) Schema validation surfacing in preview [DONE]
 - Outcome: Show friendly errors/warnings for invalid equation/chart nodes.
-- Interfaces: VS Code diagnostics provider or inline preview banner fed by JSON Schema validation.
+- Interfaces: Inline/side preview banners with validation issues (host-side lightweight validator for required fields; first issue shown with tooltip of all). Future: diagnostics provider.
 
 22) “Open in Vega Editor” affordance (optional)
 - Outcome: Button opens current chart spec in Vega Editor in browser.
@@ -203,3 +203,4 @@ S3) Side preview panel (auto-synced) [DONE]
  - 2025-09-10: Stabilized rich hovers and chart pipeline. Equations render as MathJax SVG data URIs; charts render headlessly via Vega to SVG with a lite-like compiler, value coercion, and better scale defaults. Added an in-memory SVG cache keyed by doc+node+version with a background pre-renderer to warm the cache. Switched Vega loader to dynamic import to avoid ESM/require issues and surfaced precise hover error messages. Hardened shutdown by guarding timers and webview posts to avoid unhandled cancellations when the extension host terminates.
  - 2025-09-10: Completed Stable Editor UX Task S2. Added CodeLens (Preview • Edit) and gutter badges for rich nodes; new command `RichYAML: Preview Node`. README bumped to v0.1.20.
  - 2025-09-10: Completed Stable Editor UX Task S3. Added side preview Webview View (`richyaml.sidePreview`) that auto-syncs to the selected/nearest rich node and supports edits/data requests using the inline renderer. README bumped to v0.1.21.
+ - 2025-09-15: Completed v0.2 Task 21. Added lightweight validation module surfacing errors/warnings (missing mathjson, chart title/encoding/data) in inline and side previews via issue banners. README bumped to v0.1.22.

@@ -17,7 +17,7 @@
     return el;
   }
 
-  function renderEquation(root, data, path) {
+  function renderEquation(root, data, path, issues) {
     root.innerHTML = '';
   const hasMath = !!customElements.get('math-field');
     // Keep the equation very compact: no title; just the content
@@ -46,6 +46,20 @@
         body.appendChild(pre);
       }
       root.appendChild(body);
+      // Issues banner
+      if (Array.isArray(issues) && issues.length) {
+        const banner = h('div', { className: 'ry-issues', role: 'alert', 'aria-label': 'Equation issues' });
+        const errs = issues.filter(i => i.severity === 'error');
+        const warns = issues.filter(i => i.severity !== 'error');
+        banner.style.color = 'var(--vscode-errorForeground, #f00)';
+        banner.style.fontSize = '11px';
+        banner.style.padding = '2px 6px';
+        banner.style.margin = '2px 6px';
+        banner.style.borderLeft = '3px solid var(--vscode-errorForeground, #f00)';
+        banner.textContent = errs.length ? errs[0].message : warns[0].message;
+        if (issues.length > 1) banner.title = issues.map(i => i.severity.toUpperCase()+': '+i.message).join('\n');
+        root.appendChild(banner);
+      }
       // Debounced change -> host edit apply
       let t;
       const send = () => {
@@ -115,7 +129,7 @@
     const tid = setTimeout(() => done(new Error('vega timeout')), 8000);
   }
 
-  function renderChart(root, chart, path) {
+  function renderChart(root, chart, path, issues) {
     root.innerHTML = '';
   const title = h('div', { className: 'ry-title', text: chart.title || 'Chart', role: 'heading', 'aria-level': '3' });
   const body = h('div', { className: 'ry-body ry-body-chart', role: 'group', 'aria-label': 'Chart preview and controls' });
@@ -163,6 +177,19 @@
     body.appendChild(target);
     body.appendChild(controls);
     root.appendChild(title);
+    if (Array.isArray(issues) && issues.length) {
+      const banner = h('div', { className: 'ry-issues', role: 'alert', 'aria-label': 'Chart issues' });
+      const errs = issues.filter(i => i.severity === 'error');
+      const warns = issues.filter(i => i.severity !== 'error');
+      banner.style.color = errs.length ? 'var(--vscode-errorForeground, #f00)' : 'var(--vscode-editorWarning-foreground, #e0a800)';
+      banner.style.fontSize = '11px';
+      banner.style.padding = '2px 6px';
+      banner.style.margin = '2px 6px';
+      banner.style.borderLeft = `3px solid ${errs.length ? 'var(--vscode-errorForeground, #f00)' : 'var(--vscode-editorWarning-foreground, #e0a800)'}`;
+      banner.textContent = errs.length ? errs[0].message : warns[0].message;
+      if (issues.length > 1) banner.title = issues.map(i => i.severity.toUpperCase()+': '+i.message).join('\n');
+      root.appendChild(banner);
+    }
     root.appendChild(body);
 
     // Validation helpers
@@ -355,8 +382,8 @@
     if (msg.type !== 'preview:init' && msg.type !== 'preview:update') return;
     const root = document.getElementById('root');
     if (!root) return;
-    if (msg.nodeType === 'equation') renderEquation(root, msg.data, msg.path);
-    else if (msg.nodeType === 'chart') renderChart(root, msg.data, msg.path);
+  if (msg.nodeType === 'equation') renderEquation(root, msg.data, msg.path, msg.issues);
+  else if (msg.nodeType === 'chart') renderChart(root, msg.data, msg.path, msg.issues);
   }
 
   window.addEventListener('message', onMessage);

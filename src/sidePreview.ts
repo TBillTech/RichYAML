@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { parseWithTags, findRichNodes, RichNodeInfo } from './yamlService';
+import { validateEquation, validateChart } from './validation';
 import { resolveDataFileRelative } from './dataResolver';
 
 export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
@@ -80,7 +81,8 @@ export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.
     if (!data) return this.clear();
     this.lastDoc = doc; this.lastNode = node;
     const nodeType = node.tag === '!chart' ? 'chart' : 'equation';
-    const payload = { type: 'preview:update', nodeType, data, path: node.path };
+  const issues = nodeType === 'equation' ? validateEquation(data) : nodeType === 'chart' ? validateChart(data) : [];
+  const payload = { type: 'preview:update', nodeType, data, path: node.path, issues };
     try { this.view.webview.postMessage(payload); } catch {}
   }
 

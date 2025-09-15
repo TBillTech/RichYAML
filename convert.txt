@@ -1,0 +1,39 @@
+Solution:
+Step 1:
+Though the rotating frame is non-inertial, we can analyze the problem in an inertial frame by introducing a fictitious (centrifugal) gravitational acceleration. Let the habitat (cylinder) have radius $R_C$ and angular velocity $\omega$. Define
+$$ g \equiv R_C \omega^2, \qquad h' \equiv \frac{h}{R_C}. $$
+Step 2:
+The fictitious gravitational acceleration at an inward height $h$ (so local radius $R_C - h$) is taken to be
+$$ g_f = \frac{(R_C - h)^2 \omega^2}{R_C} = g\,(1 - 2h' + h'^2). $$
+Step 3:
+The work (potential energy increase relative to the outer rim) required to raise a mass $m$ from $h=0$ to $h$ is
+$$ P = \int_0^{h} m g_f\, dh = m g \left( h - \frac{h^2}{R_C} + \frac{h^3}{3 R_C^2} \right). $$
+Step 4:
+At the top of the loop of radius $R$, the required speed satisfies
+$$ g\Bigl(1 - 4\,\frac{R}{R_C} + 4\,\frac{R^2}{R_C^2}\Bigr) = \frac{v^2}{R}. $$
+Step 5:
+Hence the kinetic energy there is
+$$ \text{KE} = \tfrac12 m v^2 = \tfrac12 m \left( gR - \frac{4 g R^2}{R_C} + \frac{4 g R^3}{R_C^2} \right)
+			= m \left( \frac{gR}{2} - \frac{2 g R^2}{R_C} + \frac{2 g R^3}{R_C^2} \right). $$
+Step 6:
+The potential energy (relative to the rim) at the loop top (height $2R$) is
+$$ P_T = m g \left( 2R - \frac{4 R^2}{R_C} + \frac{8 R^3}{3 R_C^2} \right). $$
+Step 7:
+Energy conservation between $h_{\min}$ (release point, zero initial relative velocity) and the loop top gives
+$$ m g h_{\min} - m g \frac{h_{\min}^2}{R_C} + m g \frac{h_{\min}^3}{3 R_C^2} = m \left( \frac{gR}{2} - \frac{2 g R^2}{R_C} + \frac{2 g R^3}{R_C^2} \right) + m g \left( 2R - \frac{4 R^2}{R_C} + \frac{8 R^3}{3 R_C^2} \right). $$
+Step 8:
+Dividing by $m g$:
+$$ h_{\min} - \frac{h_{\min}^2}{R_C} + \frac{h_{\min}^3}{3 R_C^2} = \frac{5R}{2} - \frac{6 R^2}{R_C} + \frac{14 R^3}{3 R_C^2}. $$
+Step 9:
+Introducing $h'_{\min} = h_{\min}/R_C$ and $r = R / R_C$ and multiplying through by 3 yields
+$$ 3 h'_{\min} - 3 h_{\min}'^{2} + h_{\min}'^{3} = \frac{15}{2} r - 18 r^2 + 14 r^3. $$
+Step 10:
+Rewriting,
+$$ (h'_{\min} - 1)^3 + 1 = \frac{15}{2} r - 18 r^2 + 14 r^3. $$
+Step 11:
+Solving for $h'_{\min}$:
+$$ h'_{\min} = 1 - \sqrt[3]{\,1 - \frac{15}{2} r + 18 r^2 - 14 r^3\,}. $$
+Step 12:
+Thus
+$$ h_{\min} = R_C \left[ 1 - \sqrt[3]{\,1 - \frac{15}{2} \frac{R}{R_C} + 18 \left(\frac{R}{R_C}\right)^2 - 14 \left(\frac{R}{R_C}\right)^3 } \right]. $$
+

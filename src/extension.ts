@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as YAML from 'yaml';
 import { RICHYAML_VERSION } from './version';
 import { parseWithTags, findRichNodes, RichNodeInfo, getPropertyValueRange } from './yamlService';
+import { validateEquation, validateChart } from './validation';
 import { RichYAMLViewProvider } from './sidePreview';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -181,7 +182,8 @@ export function activate(context: vscode.ExtensionContext) {
       const target = nodes.find(n => JSON.stringify(n.path) === JSON.stringify(nodePath)) ?? nodes[0];
       if (target && parsed.ok) {
         const data = getNodePayloadFromTree(parsed.tree as any, target);
-        const payload = { type: 'preview:init', nodeType: nodeType, data, path: target.path };
+        const issues = nodeType === 'equation' ? validateEquation(data) : nodeType === 'chart' ? validateChart(data) : [];
+        const payload = { type: 'preview:init', nodeType: nodeType, data, path: target.path, issues };
         panel.webview.postMessage(payload);
       }
       // Handle edits and data requests similarly to inline insets
@@ -610,7 +612,8 @@ function safePostMessage(webview: vscode.Webview, msg: any): void {
         const nodeType = node.tag === '!equation' ? 'equation' : node.tag === '!chart' ? 'chart' : 'unknown';
         const dataRaw = this.resolveNodeData(parsed as any, node);
         const data = this.applyDataGuards(dataRaw, maxPts);
-        const payload = { type: cur ? 'preview:update' : 'preview:init', nodeType, data, path: node.path };
+  const issues = nodeType === 'equation' ? validateEquation(data) : nodeType === 'chart' ? validateChart(data) : [];
+  const payload = { type: cur ? 'preview:update' : 'preview:init', nodeType, data, path: node.path, issues };
 
   if (cur && cur.line === line) {
           // Reuse existing inset, just update (fire and forget)

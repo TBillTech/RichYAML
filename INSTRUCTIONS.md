@@ -4,7 +4,7 @@ Use this document to guide your work in this repository. Keep your responses sho
 
 ## Next steps
 
-Focus: Start v0.2 Task 21 (Schema validation surfacing in preview) — show friendly errors/warnings for invalid equation/chart nodes in inline and side previews.
+Focus: Start v0.2 Task 22 ("Open in Vega Editor" affordance) — add a button/command to open the current chart spec in the online Vega Editor (generate Vega-Lite spec, inline or strip data as needed).
 
 Relevant `TODO.md` is in project base path
 Relevant `README.md` is in project base path
