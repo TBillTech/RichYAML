@@ -63,9 +63,21 @@ export async function applyRichNodeEdit(doc: vscode.TextDocument, msg: RichEditM
       if (range) {
         wsEdit.replace(doc.uri, new vscode.Range(doc.positionAt(range.start), doc.positionAt(range.end)), serialized);
       } else {
-        const insertPos = doc.positionAt(targetNode.range.start);
-        const indent = '  ';
-        wsEdit.insert(doc.uri, insertPos.translate(1, 0), `\n${indent}${key}: ${serialized}`);
+        // Task 19.C: Do not auto-create latex if it did not previously exist and user is editing synthesized view.
+        if (key === 'latex') {
+          const existingLatexRange = getPropertyValueRange(fullText, targetNode.path, 'latex');
+          if (existingLatexRange) {
+            const insertPos = doc.positionAt(targetNode.range.start);
+            const indent = '  ';
+            wsEdit.insert(doc.uri, insertPos.translate(1, 0), `\n${indent}${key}: ${serialized}`);
+          } else {
+            // Skip creating new latex field; treat as no-op so that subsequent mathjson regen path can handle.
+          }
+        } else {
+          const insertPos = doc.positionAt(targetNode.range.start);
+          const indent = '  ';
+          wsEdit.insert(doc.uri, insertPos.translate(1, 0), `\n${indent}${key}: ${serialized}`);
+        }
       }
       // Task 19: If editing latex for an !equation node, also update (or insert) mathjson using stub adapter.
       if (key === 'latex' && targetNode.tag === '!equation') {
@@ -103,6 +115,48 @@ export async function applyRichNodeEdit(doc: vscode.TextDocument, msg: RichEditM
     } else {
       // Nested edits (e.g., chart encoding updates)
       const [topKey, ...rest] = propPath;
+      // Task 19.C: Special case: mathjson-only edit coming from synthesized latex editing without latex field.
+      if (targetNode.tag === '!equation' && topKey === 'mathjson' && propPath.length === 1 && value && typeof value === 'object' && value.$__fromLatex !== undefined) {
+        // Recompute mathjson from provided latex string but do NOT add latex field if absent.
+        const existingLatexRange = getPropertyValueRange(fullText, targetNode.path, 'latex');
+        const latexInput = String(value.$__fromLatex || '');
+        try {
+          let overrides: string[] | undefined;
+          try {
+            const nodeText = fullText.slice(targetNode.range.start, targetNode.range.end);
+            const oMatch = nodeText.match(/override:\s*(.*)/);
+            if (oMatch) {
+              const raw = oMatch[1].trim();
+              if (raw.startsWith('[')) {
+                const list = raw.replace(/[#].*/, '').replace(/\]/, '').replace(/\[/, '');
+                overrides = list.split(/[\,\s]/).map(s => s.trim()).filter(Boolean);
+              } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(raw)) {
+                overrides = [raw];
+              }
+            }
+          } catch {}
+          const mj = latexToMathJSON(latexInput, overrides);
+          const mjRange = getPropertyValueRange(fullText, targetNode.path, 'mathjson');
+          const mjSerialized = serializeInlineObject(mj);
+          if (mjRange) {
+            wsEdit.replace(doc.uri, new vscode.Range(doc.positionAt(mjRange.start), doc.positionAt(mjRange.end)), mjSerialized);
+          } else {
+            const insertPos2 = doc.positionAt(targetNode.range.start);
+            const indent2 = '  ';
+            wsEdit.insert(doc.uri, insertPos2.translate(1, 0), `\n${indent2}mathjson: ${mjSerialized}`);
+          }
+          // Only if latex existed originally should we update it; we purposely skip insertion when absent.
+          if (existingLatexRange) {
+            wsEdit.replace(doc.uri, new vscode.Range(doc.positionAt(existingLatexRange.start), doc.positionAt(existingLatexRange.end)), serializeYamlScalar(latexInput));
+          }
+          if (wsEdit.size === 0) return false;
+          await vscode.workspace.applyEdit(wsEdit);
+          return true;
+        } catch (e) {
+          console.warn('[RichYAML] mathjson-only edit failed', e);
+          return false;
+        }
+      }
       const topRange = getPropertyValueRange(fullText, targetNode.path, topKey);
       if (!rest.length) {
         if (topRange) {

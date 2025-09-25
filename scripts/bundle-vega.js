@@ -73,6 +73,24 @@ async function bundleAll() {
   } catch (err) {
     console.warn('[bundle-vega] MathLive not found; skipping copy', err?.message || err);
   }
+
+  // Bundle Compute Engine (from @cortex-js/compute-engine) into IIFE global 'ComputeEngine'
+  try {
+    await esbuild.build({
+      entryPoints: ['@cortex-js/compute-engine'],
+      bundle: true,
+      platform: 'browser',
+      format: 'iife',
+      globalName: 'ComputeEngine',
+      minify: true,
+      outfile: path.join(outDir, 'compute-engine.min.js'),
+      sourcemap: false,
+      logLevel: 'info'
+    });
+    console.log('[bundle-vega] Bundled Compute Engine to media/vendor');
+  } catch (err) {
+    console.warn('[bundle-vega] Compute Engine bundle failed', err?.message || err);
+  }
 }
 
 bundleAll().catch((err) => {

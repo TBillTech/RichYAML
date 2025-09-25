@@ -2,7 +2,7 @@
   "name": "richyaml",
   "displayName": "RichYAML",
   "description": "View/edit YAML with rendered equations and charts.",
-  "version": "0.2.22",
+  "version": "0.2.25",
   "publisher": "TBillTech",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {

@@ -9,15 +9,114 @@
     const header = h('div',{className:'ry-head', text: editable? 'Equation (current)' : 'Equation'});
     const body = h('div',{className:'ry-body'});
     const mf = document.createElement('math-field');
+    let originalLatexAbsent = false;
     try {
       const lx = item.data?.latex;
-      mf.value = (lx !== undefined && lx !== null) ? String(lx) : (item.data?.mathjson ? '' : '\\text{MathJSON}');
+      originalLatexAbsent = (lx === undefined || lx === null) && !!item.data?.mathjson;
+      if (lx !== undefined && lx !== null) {
+        mf.value = String(lx);
+      } else if (item.data?.mathjson) {
+        function miniLatex(expr){
+          try{
+            if(expr==null) return '';
+            if(typeof expr==='number') return String(expr);
+            if(typeof expr==='string') return expr;
+            if(Array.isArray(expr)){
+              const [head,...rest]=expr;
+              switch(head){
+                case 'Equal': return rest.map(miniLatex).join(' = ');
+                case 'Add': return rest.map(miniLatex).join(' + ');
+                case 'Subtract': return rest.map(miniLatex).join(' - ');
+                case 'Multiply': return rest.map(r=>{ const s=miniLatex(r); return /^(Add|Subtract)$/i.test(r?.[0])? '('+s+')': s; }).join(' \\cdot ');
+                case 'Divide': return rest.length===2? `\\frac{${miniLatex(rest[0])}}{${miniLatex(rest[1])}}` : rest.map(miniLatex).join('/');
+                case 'Rational': return rest.length===2? `\\frac{${miniLatex(rest[0])}}{${miniLatex(rest[1])}}` : '';
+                case 'Power': return rest.length===2? `${miniLatex(rest[0])}^{${miniLatex(rest[1])}}` : '';
+                case 'Sqrt': return rest.length? `\\sqrt{${miniLatex(rest[0])}}`:'\\sqrt{}';
+                case 'Root': return rest.length===2? `\\sqrt[${miniLatex(rest[1])}]{${miniLatex(rest[0])}}`:'';
+                case 'Negate': return '-'+miniLatex(rest[0]);
+                case 'Factorial': return miniLatex(rest[0])+'!';
+                case 'Apply': if(rest.length){ const fn=miniLatex(rest[0]); const args=rest.slice(1).map(miniLatex).join(','); return `${fn}(${args})`; } return '';
+                default: if(typeof head==='string' && rest.length){ return `${head}(${rest.map(miniLatex).join(',')})`; } return head+'';
+              }
+            }
+          }catch(e){}
+          return '';
+        }
+        // Try real ComputeEngine serialization first
+        let serialized = '';
+        try {
+          // (logging removed) attempting serialization from mathjson
+          let ce = window.__richyamlCE;
+          if (!ce && globalThis.MathfieldElement && globalThis.MathfieldElement.computeEngine) {
+            ce = window.__richyamlCE = globalThis.MathfieldElement.computeEngine;
+            // Using embedded MathfieldElement.computeEngine
+          }
+          if (!ce && window.ComputeEngine) {
+            try { ce = window.__richyamlCE = new window.ComputeEngine(); } catch (e) { console.warn('[RichYAML][side] Failed new ComputeEngine()', e); }
+          }
+          if (ce) {
+            try {
+              if (typeof ce.serialize === 'function') {
+                serialized = ce.serialize(item.data.mathjson) || '';
+                // CE serialize result obtained
+              } else if (typeof ce.box === 'function') {
+                const boxed = ce.box(item.data.mathjson);
+                serialized = (boxed && boxed.latex) || '';
+                // CE box().latex result obtained
+              } else {
+                console.warn('[RichYAML][side] CE has neither serialize nor box');
+              }
+            } catch (e) { console.warn('[RichYAML][side] Error during CE serialization', e); }
+          } else {
+            // Compute Engine not yet available
+          }
+        } catch (e) { console.warn('[RichYAML][side] Serialization attempt failed', e); }
+        if (!serialized) {
+          try {
+            const mj = item.data.mathjson;
+            if (Array.isArray(mj) && mj[0] === 'Equal' && mj.length === 3) serialized = String(mj[1]) + ' = ' + String(mj[2]);
+            else { const mini = miniLatex(mj); if(mini){ serialized = mini; } }
+          } catch {}
+        }
+        mf.value = serialized;
+      } else {
+        mf.value = '';
+      }
+      // Retry logic if CE not yet available and nothing serialized
+      if (!mf.value && item.data?.mathjson) {
+        let attempts = 0;
+        const retry = () => {
+          if (mf.value) return; // user typed or already filled
+          if (attempts++ >= 5) return;
+            let ce = window.__richyamlCE;
+            if (!ce && globalThis.MathfieldElement && globalThis.MathfieldElement.computeEngine) {
+              ce = window.__richyamlCE = globalThis.MathfieldElement.computeEngine;
+              // Found CE on retry attempt
+            }
+            if (ce) {
+              try {
+                let out = '';
+                if (typeof ce.serialize === 'function') out = ce.serialize(item.data.mathjson) || '';
+                else if (typeof ce.box === 'function') out = ce.box(item.data.mathjson).latex || '';
+                if (out) {
+                  mf.value = out; mf.removeAttribute('placeholder');
+                  // Serialization succeeded on retry
+                  return;
+                }
+              } catch (e) { console.warn('[RichYAML][side][retry] serialization error', e); }
+            }
+          setTimeout(retry, 150 * attempts);
+        };
+        setTimeout(retry, 120);
+      }
     } catch {}
+    // Provide a visible placeholder styling if empty
+    if(!mf.value){ mf.setAttribute('placeholder','Enter LaTeX…'); }
   if(!effEditable) mf.setAttribute('readonly','');
   mf.setAttribute('aria-label', effEditable? 'Editable equation latex' : 'Equation latex');
     body.appendChild(mf);
   if(effEditable){
-      let t; const send=()=>{ if(!vscode) return; vscode.postMessage({type:'edit:apply', path:item.path, key:'latex', edit:'set', value: mf.value||''}); };
+  let t; const send=()=>{ if(!vscode) return; const val=mf.value||''; if(originalLatexAbsent){ vscode.postMessage({type:'edit:apply', path:item.path, propPath:['mathjson'], edit:'set', value:{ $__fromLatex: val }}); } else { vscode.postMessage({type:'edit:apply', path:item.path, key:'latex', edit:'set', value: val}); }};
       mf.addEventListener('input', ()=>{ clearTimeout(t); t=setTimeout(send,200); });
     }
     wrap.appendChild(header); wrap.appendChild(body); container.appendChild(wrap);

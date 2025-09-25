@@ -102,11 +102,12 @@
       } catch {}
       mf.setAttribute('readonly', '');
       mf.setAttribute('virtual-keyboard-mode', 'off');
-      const latexInput = eq.latex || undefined;
-      if (latexInput) {
-        try { mf.value = String(latexInput); } catch {}
+      const hasLatex = !(eq.latex === undefined || eq.latex === null);
+      if (hasLatex) {
+        try { mf.value = String(eq.latex); } catch {}
       } else {
-        try { mf.value = '\\text{MathJSON node}'; } catch {}
+        // Task 19.C: latex absent; show mathjson tree and leave math-field blank (transient editing would synthesize)
+        try { mf.value = ''; } catch {}
         if (eq.mathjson) {
           const pre = document.createElement('pre');
           pre.className = 'eq-mathjson';

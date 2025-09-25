@@ -1,4 +1,4 @@
-# RichYAML v0.2.22
+# RichYAML v0.2.25
 VSCode Extension to view/edit YAML with in place rendering of formulas and charts (and more)
 
 YAML as a single, portable “source of truth” with equations stored as MathJSON and declarative charts.
@@ -95,6 +95,10 @@ If you have feedback or want to prioritize a CAS engine, open an issue with your
 
 
 ## Inline previews in the regular YAML editor
+
+Update (v0.2.24 Task 19.C enhancement): For equations missing a `latex` field, RichYAML now attempts real MathLive Compute Engine serialization of the existing MathJSON to populate the editable mathfield. If serialization is unavailable, it falls back to a simple heuristic (equality detection). Edits still update only `mathjson` (no automatic `latex` key creation) unless you add `latex` manually.
+
+Update (v0.2.25): Added a lightweight built‑in MathJSON→LaTeX mini fallback (handles Equal, Add, Subtract, Multiply, Divide/Rational, Power, Sqrt/Root, Negate, Factorial, simple Apply) used only when the Compute Engine still isn’t ready after initial attempts. This provides a readable starter LaTeX instead of a blank field while preserving the no‑auto `latex` key policy.
 
 RichYAML’s core requirement is that equations, charts, and other rich displays render inline alongside your YAML text. You keep using the normal YAML editor; RichYAML can add inline “insets” where `!equation` and `!chart` nodes appear. Edits you make in those insets write back to the YAML so the file remains the single source of truth.
 

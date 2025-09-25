@@ -199,6 +199,7 @@ export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.
     const mathliveCss = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-static.css')).toString();
     const mathliveFontsCss = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-fonts.css')).toString();
     const mathliveJs = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive.min.js')).toString();
+  const computeEngineJs = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'compute-engine.min.js')).toString();
     const vegaShimUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vega-shim.js'));
     const vegaLocalFs = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'vega.min.js');
     const interpLocalFs = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'vega-interpreter.min.js');
@@ -228,6 +229,7 @@ export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.
 </head><body>
 <div class="header">RichYAML Preview</div>
 <div id="root" role="group" aria-label="RichYAML side preview" tabindex="0"></div>
+<script nonce="${nonce}" src="${computeEngineJs}"></script>
 <script nonce="${nonce}" src="${mathliveJs}"></script>
 <script nonce="${nonce}" src="${vegaShimUri}" data-vega="${vegaLocalUri}" data-interpreter="${interpLocalUri}"${!allowNet ? ' data-no-network="true"' : ''}></script>
 ${contextWindow > 0 ? `<script nonce="${nonce}" src="${sideViewJsUri}"></script>` : `<script nonce="${nonce}" src="${inlineJsUri}" data-mode="${mode}"></script>`}

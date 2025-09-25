@@ -4,7 +4,7 @@ Use this document to guide your work in this repository. Keep your responses sho
 
 ## Next steps
 
-Focus: Begin v0.2 Task 19.B .
+Focus: Begin v0.2 Task 20 (Two-way editing: Chart controls → YAML refinement / potential enhancements). Current version: v0.2.24.
 
 Relevant `TODO.md` is in project base path
 Relevant `README.md` is in project base path

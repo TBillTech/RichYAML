@@ -44,7 +44,110 @@
   if(panelMode !== 'preview') mf.removeAttribute('readonly'); else mf.setAttribute('readonly','');
       mf.setAttribute('virtual-keyboard-mode', 'manual');
       mf.setAttribute('aria-label', 'Equation latex editor');
-  try { mf.value = (data.latex !== undefined && data.latex !== null) ? String(data.latex) : (data.mathjson ? '' : '\\text{MathJSON}'); } catch {}
+  // Task 19.C: If latex is absent but mathjson present, synthesize a transient latex for editing view only.
+  let originalLatexAbsent = (data.latex === undefined || data.latex === null) && !!data.mathjson;
+  let synthesizedLatex = '';
+  // Minimal fallback MathJSON->LaTeX serializer (subset) if CE unavailable
+  function miniLatex(expr){
+        try{
+          if(expr==null) return '';
+          if(typeof expr==='number') return String(expr);
+          if(typeof expr==='string') return expr; // assume symbol or already latex-safe
+          if(Array.isArray(expr)){
+            const [head, ...rest] = expr;
+            switch(head){
+              case 'Equal': return rest.map(miniLatex).join(' = ');
+              case 'Add': return rest.map(miniLatex).join(' + ');
+              case 'Subtract': return rest.map(miniLatex).join(' - ');
+              case 'Multiply': return rest.map(r=>{ const s=miniLatex(r); return /^(Add|Subtract)$/i.test(r?.[0])? '('+s+')': s; }).join(' \\cdot ');
+              case 'Divide': return rest.length===2? `\\frac{${miniLatex(rest[0])}}{${miniLatex(rest[1])}}` : rest.map(miniLatex).join('/');
+              case 'Rational': return rest.length===2? `\\frac{${miniLatex(rest[0])}}{${miniLatex(rest[1])}}` : '';
+              case 'Power': return rest.length===2? `${miniLatex(rest[0])}^{${miniLatex(rest[1])}}` : '';
+              case 'Sqrt': return rest.length? `\\sqrt{${miniLatex(rest[0])}}`: '\\sqrt{}';
+              case 'Root': return rest.length===2? `\\sqrt[${miniLatex(rest[1])}]{${miniLatex(rest[0])}}`: '';
+              case 'Negate': return '-'+miniLatex(rest[0]);
+              case 'Factorial': return miniLatex(rest[0])+'!';
+              case 'Apply': if(rest.length){ const fn=miniLatex(rest[0]); const args=rest.slice(1).map(miniLatex).join(','); return `${fn}(${args})`; } return '';
+              default: {
+                // Generic function-like representation
+                if(typeof head==='string' && rest.length){
+                  return `${head}(${rest.map(miniLatex).join(',')})`;
+                }
+                return head + '';
+              }
+            }
+          }
+        }catch(e){ /* ignore */ }
+        return '';
+      }
+  if (originalLatexAbsent && data.mathjson) {
+        try {
+          // (logging removed) attempting serialization from mathjson
+          let ce = window.__richyamlCE;
+          if (!ce && globalThis.MathfieldElement && globalThis.MathfieldElement.computeEngine) {
+            ce = window.__richyamlCE = globalThis.MathfieldElement.computeEngine;
+            // Using embedded MathfieldElement.computeEngine
+          }
+            if (!ce && window.ComputeEngine) {
+            try { ce = window.__richyamlCE = new window.ComputeEngine(); } catch (e) { console.warn('[RichYAML][inline] Failed new ComputeEngine()', e); }
+          }
+          if (ce) {
+            try {
+              if (typeof ce.serialize === 'function') {
+                synthesizedLatex = ce.serialize(data.mathjson) || '';
+                // CE serialize result obtained
+              } else if (typeof ce.box === 'function') {
+                const boxed = ce.box(data.mathjson);
+                synthesizedLatex = (boxed && boxed.latex) || '';
+                // CE box().latex result obtained
+              } else {
+                console.warn('[RichYAML][inline] CE has neither serialize nor box');
+              }
+            } catch (e) { console.warn('[RichYAML][inline] Error during CE serialization', e); }
+          } else {
+            // Compute Engine not yet available
+          }
+          if (!synthesizedLatex) {
+            const mj = data.mathjson;
+            if (Array.isArray(mj) && mj[0] === 'Equal' && mj.length === 3) {
+              synthesizedLatex = String(mj[1]) + ' = ' + String(mj[2]);
+              // Fallback equality heuristic used
+            } else {
+              const mini = miniLatex(mj);
+              if(mini){ synthesizedLatex = mini; }
+            }
+          }
+        } catch (e) { console.warn('[RichYAML][inline] Serialization fallback error', e); synthesizedLatex = ''; }
+        // If still empty and CE wasn't available, schedule a retry (up to 5 attempts)
+        if (!synthesizedLatex) {
+          let attempts = 0;
+          const retry = () => {
+            if (mf.value) return; // user may have typed
+            if (attempts++ >= 5) return;
+            let ce = window.__richyamlCE;
+            if (!ce && globalThis.MathfieldElement && globalThis.MathfieldElement.computeEngine) {
+              ce = window.__richyamlCE = globalThis.MathfieldElement.computeEngine;
+              // Found CE on retry attempt
+            }
+            if (ce) {
+              try {
+                let out = '';
+                if (typeof ce.serialize === 'function') out = ce.serialize(data.mathjson) || '';
+                else if (typeof ce.box === 'function') out = ce.box(data.mathjson).latex || '';
+                if (out) {
+                  mf.value = out; mf.removeAttribute('placeholder');
+                  // Serialization succeeded on retry
+                  return;
+                }
+              } catch (e) { console.warn('[RichYAML][inline][retry] serialization error', e); }
+            }
+            setTimeout(retry, 150 * attempts); // backoff
+          };
+          setTimeout(retry, 120);
+        }
+      }
+  try { mf.value = (data.latex !== undefined && data.latex !== null) ? String(data.latex) : synthesizedLatex; } catch {}
+  if(!mf.value){ mf.setAttribute('placeholder','Enter LaTeX…'); }
   body.appendChild(mf);
   if ((data.latex === undefined || data.latex === null) && data.mathjson) {
         const pre = h('pre', { className: 'ry-json', role: 'region', 'aria-label': 'Equation MathJSON' }, JSON.stringify(data.mathjson, null, 2));
@@ -70,8 +173,13 @@
         let t;
         const send = () => {
           if (!vscode) return;
-          const payload = { type: 'edit:apply', path, key: 'latex', edit: 'set', value: mf.value || '' };
-          vscode.postMessage(payload);
+          const val = mf.value || '';
+          // Task 19.C: If original node lacked latex, send mathjson-only update request (host regenerates mathjson from latex silently without inserting latex key)
+          if (originalLatexAbsent) {
+            vscode.postMessage({ type: 'edit:apply', path, propPath: ['mathjson'], edit: 'set', value: { $__fromLatex: val } });
+          } else {
+            vscode.postMessage({ type: 'edit:apply', path, key: 'latex', edit: 'set', value: val });
+          }
         };
   // Task 19: increase debounce to 300ms to consolidate LaTeX->MathJSON updates
   const onInput = () => { clearTimeout(t); t = setTimeout(send, 300); postSizeSoon(); };

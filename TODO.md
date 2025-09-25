@@ -146,8 +146,10 @@ Override feature subtasks (v0.2.21) [DONE]
 - Updated schema (`schemas/richyaml.schema.json`) and validation to accept and lightly type-check `override`.
 - Documentation: README and TODO updated; version bumped to v0.2.21.
 
-19.C) Support _absent_ `latex` field in the YAML.
-- Outcome: If the `latex` feild is missing, then when the equation is rendered, use the MatLive serialization capability to create the LaTeX for the equation editor in memory.  Likewise, when the equation is modified in the editor, use the parsing capability to update the `mathjson` field without having a `latex` field present.
+19.C) Support _absent_ `latex` field in the YAML. [DONE]
+- Outcome: If the `latex` field is missing, equation renders with an empty editable mathfield and shows the existing `mathjson` (JSON block). User edits regenerate `mathjson` only (no `latex` key insertion). If a `latex` key exists, normal two-way latex↔mathjson updates apply.
+ - Enhancement (v0.2.24): When `latex` is absent, attempt Compute Engine MathJSON→LaTeX serialization to seed the editor; fallback to simple heuristic if CE not loaded.
+ - Enhancement (v0.2.25): Added mini built-in serializer (basic arithmetic, power, roots, factorial, function apply) as a final fallback when CE remains unavailable after retries.
 
 20) Two-way editing: Chart controls → YAML
 - Outcome: Basic chart panel (title/mark/encodings) updates YAML nodes.

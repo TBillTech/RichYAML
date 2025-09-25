@@ -353,6 +353,9 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     const mathliveJsLocal = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive.min.js')
     );
+    const computeEngineJsLocal = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'compute-engine.min.js')
+    );
     const mathliveCssLocal = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-static.css')
     );
@@ -397,6 +400,7 @@ class RichYAMLCustomEditorProvider implements vscode.CustomTextEditorProvider {
     </details>
   </div>
   <script nonce="${nonce}" src="${mathliveJsLocal}"></script>
+  <script nonce="${nonce}" src="${computeEngineJsLocal}"></script>
   <!-- Load Vega shim first to expose window.vega and expressionInterpreter under CSP -->
   <script nonce="${nonce}" src="${vegaShimUri}"${vegaLocalUri ? ` data-vega="${vegaLocalUri}"` : ''}${interpLocalUri ? ` data-interpreter="${interpLocalUri}"` : ''}${!allowNet ? ' data-no-network="true"' : ''}></script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
@@ -756,6 +760,7 @@ function safePostMessage(webview: vscode.Webview, msg: any): void {
   const mathliveCss = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-static.css')).toString();
   const mathliveFontsCss = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive-fonts.css')).toString();
   const mathliveJs = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'mathlive.min.js')).toString();
+  const computeEngineJs = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor', 'compute-engine.min.js')).toString();
   const vegaShimUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vega-shim.js'));
   // Prefer local vendor bundles if available (built by prebuild script)
   const vegaLocalFs = path.join(this.context.extensionPath, 'media', 'vendor', 'vega.min.js');
@@ -793,6 +798,7 @@ function safePostMessage(webview: vscode.Webview, msg: any): void {
 <style>${style}</style>
 </head><body>
 <div id="root" role="group" aria-label="RichYAML inline preview" tabindex="0"></div>
+<script nonce="${nonce}" src="${computeEngineJs}"></script>
 <script nonce="${nonce}" src="${mathliveJs}"></script>
 <script nonce="${nonce}" src="${vegaShimUri}"${vegaLocalUri ? ` data-vega="${vegaLocalUri}"` : ''}${interpLocalUri ? ` data-interpreter="${interpLocalUri}"` : ''}${!allowNet ? ' data-no-network="true"' : ''}></script>
 <script nonce="${nonce}" src="${inlineJsUri}"></script>
