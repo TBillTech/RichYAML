@@ -334,6 +334,27 @@
   function handleMessage(event) {
     try {
       const msg = event.data || {};
+      if (msg.type === 'preview:error') {
+        const eq = document.getElementById('equations');
+        const ch = document.getElementById('charts');
+        if (eq) eq.innerHTML = '';
+        if (ch) ch.innerHTML = '';
+        const content = document.getElementById('content');
+        if (content) {
+          content.textContent = (msg.error ? ('Invalid YAML: ' + msg.error) : 'Invalid YAML') + '\n';
+        }
+        // Show prominent banner
+        let container = document.querySelector('.container');
+        if (container && !container.querySelector('.ry-error')) {
+          const div = document.createElement('div');
+          div.className = 'ry-error';
+          div.setAttribute('role','alert');
+          div.textContent = msg.error || 'Invalid YAML';
+          div.style.cssText='margin:8px; padding:8px 10px; background:var(--vscode-inputValidation-errorBackground,#5a1d1d); color:var(--vscode-inputValidation-errorForeground,#fff); border-left:4px solid var(--vscode-errorForeground,#f00); font-size:13px; border-radius:4px;';
+          container.prepend(div);
+        }
+        return;
+      }
       if (msg.type === 'document:update') {
         // Capture state to avoid scroll/focus jumps on update
         const ui = captureUiState();

@@ -38,30 +38,15 @@ true_anomaly: !equation
 
 potential: !equation
   desc: "Gravitational Potential"
+  override: [G]
   latex: "P=\\frac{Gm_1m_2}{r^2}"
   mathjson:
-    fn: [
-      "Equal",
-      "P",
-      [
-        "Divide",
-        [
-          "Multiply",
-          "G",
-          [
-            "Multiply",
-              "m1",
-              "m2"
-          ]
-        ],
-        [
-          "Power",
-          "r",
-          2
-        ]
-      ]
-    ]
-
+    ["Equal","P",["Divide",["InvisibleOperator","G",["At","m",["InvisibleOperator",1,["At","m",2]]]],["Power","r",2]]]
+potentail2: !equation
+  desc: "Gravitational Potential"
+  latex: "P=\\frac{G_{E}m_1m_2}{r^2}"
+  mathjson:
+    ["Equal","P",["Divide",["InvisibleOperator",["At","CatalanConstant","E"],["At","m",["InvisibleOperator",1,["At","m",2]]]],["Power","r",2]]]
 # Chart: Approximate Earth–Mars distance over time (toy data)
 # Values are illustrative, not ephemerides-accurate.
 earth_mars_distance: !chart

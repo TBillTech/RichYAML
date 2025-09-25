@@ -387,6 +387,19 @@
 
   function onMessage(ev) {
     const msg = ev.data || {};
+    if (msg.type === 'preview:error') {
+      const root = document.getElementById('root');
+      if (!root) return;
+      root.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'ry-error';
+      div.setAttribute('role','alert');
+      div.textContent = msg.error || 'Invalid YAML';
+      div.style.cssText = 'margin:6px; padding:6px 8px; background:var(--vscode-inputValidation-errorBackground,#5a1d1d); color:var(--vscode-inputValidation-errorForeground,#fff); border-left:4px solid var(--vscode-errorForeground,#f00); font-size:12px; border-radius:4px;';
+      root.appendChild(div);
+      try { if (vscode) vscode.postMessage({ type: 'size', heightPx: Math.ceil(root.getBoundingClientRect().height) }); } catch {}
+      return;
+    }
     if (msg.type !== 'preview:init' && msg.type !== 'preview:update') return;
     const root = document.getElementById('root');
     if (!root) return;

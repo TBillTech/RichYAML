@@ -8,7 +8,7 @@ export type ValidationIssue = {
   path?: Array<string | number>; // path within the node (e.g., ['encoding','x','field'])
 };
 
-export interface EquationData { latex?: any; mathjson?: any; desc?: any; }
+export interface EquationData { latex?: any; mathjson?: any; desc?: any; override?: any; }
 export interface ChartData { title?: any; mark?: any; data?: any; encoding?: any; legend?: any; colors?: any; vegaLite?: any; width?: any; height?: any; }
 
 // Validate an !equation payload (already shallow-projected by host)
@@ -30,6 +30,9 @@ export function validateEquation(eq: EquationData | undefined): ValidationIssue[
   }
   if (eq.desc != null && typeof eq.desc !== 'string') {
     issues.push({ severity: 'warning', message: 'desc should be a string', code: 'eq.descType', path: ['desc'] });
+  }
+  if (eq.override != null && !(typeof eq.override === 'string' || Array.isArray(eq.override))) {
+    issues.push({ severity: 'warning', message: 'override should be a string or list of symbols', code: 'eq.overrideType', path: ['override'] });
   }
   return issues;
 }
@@ -86,7 +89,7 @@ export function validateChart(chart: ChartData | undefined): ValidationIssue[] {
   return issues;
 }
 
-function isAllowedType(t) {
+function isAllowedType(t: unknown) {
   return ['quantitative','nominal','temporal','ordinal'].includes(String(t).toLowerCase());
 }
 

@@ -1,4 +1,4 @@
-# RichYAML v0.2.19
+# RichYAML v0.2.22
 VSCode Extension to view/edit YAML with in place rendering of formulas and charts (and more)
 
 YAML as a single, portable “source of truth” with equations stored as MathJSON and declarative charts.
@@ -159,7 +159,7 @@ The export type contains per-target settings (e.g., LaTeX template options).
 
 A Custom Editor with a Webview shows a two-pane UI: YAML source (Monaco or the built-in editor) + rich preview. Use message passing to sync changes. 
 
-Equations: embed MathLive in the webview—author in a mathfield, store canonical MathJSON back into the YAML; use Compute Engine for validation/simplification and LaTeX round-trip. 
+Equations: embed MathLive in the webview—author in a mathfield, store canonical MathJSON back into the YAML; use Compute Engine for validation/simplification and LaTeX round-trip. Optional `override` (string or string array) forces listed symbols to be treated as plain variables instead of known constants during LaTeX→MathJSON parsing.
 
 Charts: render from YAML → Vega-Lite spec → vega-embed. Support inline arrays or file: URI for CSV/JSON; add a resolver to load local workspace files into the webview. 
 

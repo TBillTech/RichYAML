@@ -108,7 +108,11 @@ export class RichYAMLViewProvider implements vscode.WebviewViewProvider, vscode.
     const node = this.pickNodeForSelection(doc, nodes, editor.selection.active);
     if (!node) return this.clear();
     const parsed = parseWithTags(text);
-    if (!parsed.ok) return this.clear();
+    if (!parsed.ok) {
+      // Show an explicit invalid YAML banner instead of clearing silently
+      try { this.view.webview.postMessage({ type: 'preview:error', error: 'Invalid YAML: ' + parsed.error }); } catch {}
+      return;
+    }
     const data = this.getNodePayloadFromTree(parsed.tree as any, node);
     if (!data) return this.clear();
     const previousPath = this.lastNode ? JSON.stringify(this.lastNode.path) : undefined;

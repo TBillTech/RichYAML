@@ -605,6 +605,13 @@ function safePostMessage(webview: vscode.Webview, msg: any): void {
   const text = doc.getText();
   const nodes: RichNodeInfo[] = findRichNodes(text);
   const parsed = parseWithTags(text);
+  if (!parsed.ok) {
+    // Send parse error to all existing insets (so they show banner) and dispose stale ones
+    for (const [, inset] of Array.from(st.insets.entries())) {
+      try { inset.post({ type: 'preview:error', error: 'Invalid YAML: ' + parsed.error }); } catch {}
+    }
+    return; // do not attempt rendering
+  }
     const cfg = vscode.workspace.getConfiguration('richyaml');
     const maxInsets = Math.max(0, Number(cfg.get('preview.inline.maxInsets', 12)) || 0);
     const bufferLines = Math.max(0, Number(cfg.get('preview.inline.offscreenBufferLines', 20)) || 0);

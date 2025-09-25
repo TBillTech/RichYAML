@@ -132,8 +132,19 @@ S7) Setting & UX polish for side edit panel [DONE]
 - Outcome: Editing LaTeX now updates `latex` and auto-regenerates a `mathjson` object (lightweight adapter) so MathJSON stays in sync for external tools. Debounce increased (300ms) to reduce churn; conflict handling leverages existing path validation.
 - Interfaces: `edit:apply` message triggers host `applyRichNodeEdit` which now invokes `latexToMathJSON` and inserts/updates `mathjson` property.
 
-19.B) On the MathLive documentation states that "The Compute Engine manipulates MathJSON expressions. It can also convert LaTeX strings to MathJSON expressions (parsing) and output MathJSON expressions as LaTeX string (serializing)"
--Outcome: Replace the "stubbed out" latexToMathJSON function with a call to to the mathlive library parser.
+19.B) On the MathLive documentation states that "The Compute Engine manipulates MathJSON expressions. It can also convert LaTeX strings to MathJSON expressions (parsing) and output MathJSON expressions as LaTeX string (serializing)" [DONE]
+- Outcome: Replaced stubbed `latexToMathJSON` with real Compute Engine parsing. Added dynamic loader for `@cortex-js/compute-engine` (preferred) with fallback to `mathlive` import; preserves non-throw contract returning heuristic stub when CE unavailable. Added async pre-warm. Version bumped to v0.2.20.
+
+Invalid YAML UX enhancement (v0.2.22) [DONE]
+- Outcome: Instead of blank/cleared previews on malformed YAML (e.g., duplicate keys), all preview surfaces (side panel, custom preview, inline insets) now render a prominent error banner: `Invalid YAML: <message>`.
+- Interfaces: `preview:error` message emitted from side preview provider and inline controller; webview scripts (`main.js`, `inline.js`, `sideView.js`) render alert-styled banner; existing insets updated in-place on error without disposal churn.
+
+Override feature subtasks (v0.2.21) [DONE]
+- Added optional `override` (string | string[]) property to `!equation` nodes to force specified symbols to remain plain symbols (avoid constant canonicalization) during Compute Engine parse.
+- Extended `latexToMathJSON` adapter to accept overrides, inject a temporary CE scope, and apply post-parse constant replacement (e.g. `CatalanConstant` -> `G`).
+- Updated `applyRichNodeEdit` to extract override list from YAML block and pass to adapter when regenerating MathJSON.
+- Updated schema (`schemas/richyaml.schema.json`) and validation to accept and lightly type-check `override`.
+- Documentation: README and TODO updated; version bumped to v0.2.21.
 
 19.C) Support _absent_ `latex` field in the YAML.
 - Outcome: If the `latex` feild is missing, then when the equation is rendered, use the MatLive serialization capability to create the LaTeX for the equation editor in memory.  Likewise, when the equation is modified in the editor, use the parsing capability to update the `mathjson` field without having a `latex` field present.
@@ -237,3 +248,5 @@ S7) Setting & UX polish for side edit panel [DONE]
  - 2025-09-15: Completed Stable Editor UX Task S6. Added path validation & stale edit skipping with warning banner (edit:skipped) plus heuristic fallback. README unchanged (feature internal) but version context advanced.
  - 2025-09-15: Completed Stable Editor UX Task S7. Added `richyaml.sidePanel.mode` setting (edit|preview) and toggle command. Side panel honors preview (read-only). README bumped to v0.1.27.
  - 2025-09-15: Completed v0.2 Task 19. Implemented LaTeX→MathJSON stub adapter, automatic `mathjson` regeneration on LaTeX edits, increased debounce to 300ms, docs updated. Version bumped to v0.2.19.
+ - 2025-09-25: Completed v0.2 Task 19.B. Integrated Compute Engine parser replacing stub; added dynamic CE loading with fallback heuristic to ensure resilience. Added dependency `@cortex-js/compute-engine` and bumped version to v0.2.20.
+ - 2025-09-25: Added optional `override` property for equations allowing symbol override of constants during LaTeX parsing; schema & validation updated; version bumped to v0.2.21.

@@ -70,7 +70,23 @@ export async function applyRichNodeEdit(doc: vscode.TextDocument, msg: RichEditM
       // Task 19: If editing latex for an !equation node, also update (or insert) mathjson using stub adapter.
       if (key === 'latex' && targetNode.tag === '!equation') {
         try {
-          const mj = latexToMathJSON(String(value || ''));
+          // Extract overrides (if present) from existing text.
+          let overrides: string[] | undefined;
+          try {
+            const nodeText = fullText.slice(targetNode.range.start, targetNode.range.end);
+            // Simple regex to capture override lines: override: [G, h] OR override: G
+            const oMatch = nodeText.match(/override:\s*(.*)/);
+            if (oMatch) {
+              const raw = oMatch[1].trim();
+              if (raw.startsWith('[')) {
+                const list = raw.replace(/[#].*/, '').replace(/\]/, '').replace(/\[/, '');
+                overrides = list.split(/[,\s]/).map(s => s.trim()).filter(Boolean);
+              } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(raw)) {
+                overrides = [raw];
+              }
+            }
+          } catch {}
+          const mj = latexToMathJSON(String(value || ''), overrides);
           const mjRange = getPropertyValueRange(fullText, targetNode.path, 'mathjson');
           const mjSerialized = serializeInlineObject(mj);
           if (mjRange) {

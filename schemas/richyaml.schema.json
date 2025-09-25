@@ -18,7 +18,14 @@
       "properties": {
         "mathjson": { "type": "object", "description": "Canonical MathJSON tree" },
         "latex": { "type": "string", "description": "Optional LaTeX for authoring/preview" },
-        "desc": { "type": "string", "description": "Optional human-friendly description" }
+        "desc": { "type": "string", "description": "Optional human-friendly description" },
+        "override": {
+          "oneOf": [
+            { "type": "string", "description": "Single symbol to treat as plain variable (override constant)" },
+            { "type": "array", "items": { "type": "string" }, "description": "List of symbols to force as plain variables" }
+          ],
+          "description": "Symbol(s) to force as plain variables instead of recognized constants during LaTeX parse."
+        }
       },
       "required": ["mathjson"],
       "additionalProperties": true

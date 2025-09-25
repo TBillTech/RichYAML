@@ -142,7 +142,7 @@
     if(!bar){ bar=document.createElement('div'); bar.className='ry-warn'; bar.style.cssText='background:var(--vscode-editorWarning-foreground,#e0a800);color:#000;padding:2px 6px;font-size:11px;margin:2px 0;'; root.prepend(bar); }
     bar.textContent=msg; clearTimeout(bar._t); bar._t=setTimeout(()=>{ try{ bar.remove(); }catch{} }, 4000);
   }
-  function onMessage(ev){ const m=ev.data||{}; if(m.type==='preview:multi') applyPayload(m); else if(m.type==='edit:skipped'){ const reason=m.reason||'document changed'; showTransientWarning('Edit skipped: '+reason); } }
+  function onMessage(ev){ const m=ev.data||{}; if(m.type==='preview:multi') applyPayload(m); else if(m.type==='edit:skipped'){ const reason=m.reason||'document changed'; showTransientWarning('Edit skipped: '+reason); } else if(m.type==='preview:error'){ const root=document.getElementById('root'); if(root){ root.innerHTML=''; const div=document.createElement('div'); div.className='ry-error'; div.setAttribute('role','alert'); div.textContent=m.error||'Invalid YAML'; div.style.cssText='margin:6px; padding:6px 8px; background:var(--vscode-inputValidation-errorBackground,#5a1d1d); color:var(--vscode-inputValidation-errorForeground,#fff); border-left:4px solid var(--vscode-errorForeground,#f00); font-size:12px; border-radius:4px;'; root.appendChild(div);} } }
   window.addEventListener('message', onMessage);
   if(vscode) vscode.postMessage({type:'preview:ready'});
 })();
