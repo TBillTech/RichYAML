@@ -36,6 +36,32 @@ true_anomaly: !equation
       ]
     ]
 
+potential: !equation
+  desc: "Gravitational Potential"
+  latex: "P=\\frac{Gm_1m_2}{r^2}"
+  mathjson:
+    fn: [
+      "Equal",
+      "P",
+      [
+        "Divide",
+        [
+          "Multiply",
+          "G",
+          [
+            "Multiply",
+              "m1",
+              "m2"
+          ]
+        ],
+        [
+          "Power",
+          "r",
+          2
+        ]
+      ]
+    ]
+
 # Chart: Approximate Earth–Mars distance over time (toy data)
 # Values are illustrative, not ephemerides-accurate.
 earth_mars_distance: !chart

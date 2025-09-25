@@ -73,7 +73,8 @@
           const payload = { type: 'edit:apply', path, key: 'latex', edit: 'set', value: mf.value || '' };
           vscode.postMessage(payload);
         };
-        const onInput = () => { clearTimeout(t); t = setTimeout(send, 200); postSizeSoon(); };
+  // Task 19: increase debounce to 300ms to consolidate LaTeX->MathJSON updates
+  const onInput = () => { clearTimeout(t); t = setTimeout(send, 300); postSizeSoon(); };
         mf.addEventListener('input', onInput);
       }
   mf.addEventListener('keydown', (e) => {

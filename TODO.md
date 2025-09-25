@@ -118,19 +118,25 @@ Context window enhancement (v0.1.26) [DONE]
 - Outcome: Side preview can optionally show neighboring rich nodes (read-only) around the selected node when `richyaml.sidePreview.contextWindow` > 0, providing multi-node context. Current node remains editable; neighbors are summarized.
 - Interfaces: `sidePreview.ts` now sends `preview:multi` with items array; new webview script `media/sideView.js` handles multi-node rendering.
 
-S6) Conflict & path validation in side edits [PLANNED]
+S6) Conflict & path validation in side edits [DONE]
 - Outcome: If node path is stale (document changed), re-parse and locate node by structural match (tag + nearest range); show a non-blocking warning banner if edit skipped. Unit tests for stale path and missing property insert cases.
 - Interfaces: `findRichNodes`, parse service, lightweight matching heuristic.
 
-S7) Setting & UX polish for side edit panel [PLANNED]
+S7) Setting & UX polish for side edit panel [DONE]
 - Outcome: Add setting `richyaml.sidePanel.mode` = `preview` | `edit` (default: `edit` once stable). Header label reflects mode; command `RichYAML: Toggle Side Panel Mode`. README updated to advertise side editing.
 - Interfaces: `contributes.configuration`, commands, view title actions, README.
 
 ## v0.2 Usability
 
-19) Two-way editing: MathLive → YAML
-- Outcome: Edits in MathLive update `mathjson` (and optionally `latex`) in the text buffer.
-- Interfaces: `webview.postMessage` → host apply-edit; minimal conflict resolution policy.
+19) Two-way editing: MathLive → YAML [DONE]
+- Outcome: Editing LaTeX now updates `latex` and auto-regenerates a `mathjson` object (lightweight adapter) so MathJSON stays in sync for external tools. Debounce increased (300ms) to reduce churn; conflict handling leverages existing path validation.
+- Interfaces: `edit:apply` message triggers host `applyRichNodeEdit` which now invokes `latexToMathJSON` and inserts/updates `mathjson` property.
+
+19.B) On the MathLive documentation states that "The Compute Engine manipulates MathJSON expressions. It can also convert LaTeX strings to MathJSON expressions (parsing) and output MathJSON expressions as LaTeX string (serializing)"
+-Outcome: Replace the "stubbed out" latexToMathJSON function with a call to to the mathlive library parser.
+
+19.C) Support _absent_ `latex` field in the YAML.
+- Outcome: If the `latex` feild is missing, then when the equation is rendered, use the MatLive serialization capability to create the LaTeX for the equation editor in memory.  Likewise, when the equation is modified in the editor, use the parsing capability to update the `mathjson` field without having a `latex` field present.
 
 20) Two-way editing: Chart controls → YAML
 - Outcome: Basic chart panel (title/mark/encodings) updates YAML nodes.
@@ -230,3 +236,4 @@ S7) Setting & UX polish for side edit panel [PLANNED]
  - 2025-09-15: Added side preview multi-node context window and interactive chart controls with neighbor navigation & fold preservation. README bumped to v0.1.26.
  - 2025-09-15: Completed Stable Editor UX Task S6. Added path validation & stale edit skipping with warning banner (edit:skipped) plus heuristic fallback. README unchanged (feature internal) but version context advanced.
  - 2025-09-15: Completed Stable Editor UX Task S7. Added `richyaml.sidePanel.mode` setting (edit|preview) and toggle command. Side panel honors preview (read-only). README bumped to v0.1.27.
+ - 2025-09-15: Completed v0.2 Task 19. Implemented LaTeX→MathJSON stub adapter, automatic `mathjson` regeneration on LaTeX edits, increased debounce to 300ms, docs updated. Version bumped to v0.2.19.
